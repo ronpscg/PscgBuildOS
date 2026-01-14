@@ -1,0 +1,450 @@
+#!/bin/busybox sh
+
+#
+# Set some initial variable options that we want hardcoded (unless overridden by configuration or logic)
+# convention:
+#	- boot is a fat label. it's not really interesting, only in case one wants to kexec or something
+#	- system is where we'll switch_root into ()
+#
+init_env() {
+	export cmdline_file=/proc/cmdline	# allows for modifying it later, e.g. for containers and faking a commandline
+	export serial_dev=/dev/console		# allows for debugging schenenigans. You might want to change it to another serial device, depending on your configuration
+	export init="/sbin/init" 			# default init for target (chroot/switch_root/pivot_root) rootfs
+	export boot=""						# device/LABEL=/etc. for the boot partition (could work without)
+	export mountopt_bootfs=""			# mount options
+	export root=""						# device/LABEL=/etc. for the selected rootfs partition (could work without)
+	export mountopt_rootfs=""			# mount options
+
+	export INSTALLER_MEDIA_LABEL=PSCGINSTALL
+	export INSTALLER_MEDIA_MOUNT_POINT=/media/removable
+	export INSTALLER_MEDIA_INSTALLER_AB_STRATEGY=directlyfromremovablemedia	# Can be <copyoverotaextract|directlyfromremovablemedia>
+
+	export OVERLAYFS_MOUNT_POINT_BASE_DIR=/mnt/overlaysetup	# Used to contain directories that are actual mountpoints, when setting up overlayfs related mountpoints
+
+	export BOOT_DEFAULT_LABEL=BOOT_EMMC
+	export SYSTEM_DEFAULT_LABEL=system
+
+	export SYSTEM_MOUNT_POINT=/mnt/system
+
+	export DEV_BLOCK_FOLDER=SET_PER_BSP	# but almost always /dev, perhaps unless you plan to boot some versions of Android
+	export EMMC_DEVICE=SET_PER_BSP		# likely /dev/mmcblk0 but can change
+	export PARTITION_MARK=SET_PER_BSP	# either p (for mmcblk, loop, etc.) or empty
+
+	export ROOTFS_MOUNT_POINT=/non-existing-folder	# will be set by mount_rootfs* to a correct value, or left like this if no rootfs partition is found
+
+	# the following variables are relevant only for an overlayfs* cmdline
+	export ALLOW_FALLBACK_TO_TMPFS_OVERLAY=true	# if true, allows falling back to mounting overlayfs
+	export ALLOW_FALLBACK_TO_NO_OVERLAY=true		# if true, allows falling back to mounting a system partition according to strategy (see below)
+	# note about overlayfs fallback strategies:
+	# - usesystemro - use the system partition as read only. Could break init systems if they need to write to places
+	# - usesystemrw - use the system partition as read-write. May help you destroy your device ( ;-) )
+	# - <custom command> - could be mounting another partition,setting up links, etc... can help you create a fixup mechanism
+	#					   however, you should be aware that systemd does not like (multiple levels of) links, if you use it.
+	#					   If you do use something like that, you must set ROOTFS_MOUNT_POINT in it
+	# overridable by cmdline fallbacktonooverlaystrategy (as a debug means)
+	export FALLBACK_TO_NO_OVERLAY_STRATEGY="usesystemro"
+
+	# Note about the overlay strategy for the test image. The motivation behind it is that a a previous (non-tmpfs) overlay, will shadow potential
+	# changes in the tested rootfs partition, and may fail valid images.
+	# The possible values are:
+	# - usesystemro - use the test system partition as read only
+	# - usesystemrw - use the test system partition as read-write
+	# - usesystemoverlay - use the system overlay (systemrw) as on overlay to to tested system image on A/B updates
+	# - tmpfs,<size> - if the overlay is already tmpfs - ignore it. Otherwise, use a tmpfs overlay, using <size> if exists, as the tmpfs size (just like when booting to overlayfs, but this time allowing to specify another param)
+	# overridable by cmdline abtestimageoverlaystrategy (as a debug means)
+	export AB_TEST_IMAGE_OVERLAY_STRATEGY="tmpfs,100M"
+
+	# check for docker, or other pre-provisioned configuration files within this initramfs (i.e. not on other devices)
+	check_for_hacking_configurations
+}
+
+#
+# Initialize logging to volatile storage and to the console
+# Logging itself is done by the printing functions (info, warn, ..., etc.)
+#
+# source the printing functions after this function for easy and debugging-less integration
+#
+init_tmp_log_env() {
+	if [ "$multiple_log_sinks" = "true" ] ; then
+		# Print to multiple syncs. Can be very useful, e.g. if you want to see the logs after switch_root and you redirect to  /dev/kmsg
+		: ${logSink1=/dev/console}
+		: ${logSink2=/dev/kmsg}
+		: ${logSink3=$serial_dev}
+		: ${logSink4=/dev/tty0}
+	else
+		# No need to tee anything if you don't care about it - stdout will print to /dev/console anyway (but you will not see it after chroot)
+		# the rest are set by default
+		#
+		# You can select one of the sinks to be /dev/kmsg instead, if you want to see the logs after chroot even without a log file.
+		# However, you will then have double prints unless you want to implement a debug level <special characters etc, see prink> facility
+		# which is quite unnecessary, and you would probably prefer double prints in this case
+		logSink1=/dev/null
+	fi
+
+	logTag=rinit
+	mkdir -p /tmp/logs
+	logFile1=/tmp/logs/rinit.log
+	touch $logFile1
+}
+
+#
+# The function logs to the removable media. It is to be called only if the media is mounted as read-write (i.e. mountfatrw kernel cmdline argument)
+# TODO: move it to another place of debug helpers, or to commonEnv (but only if you have the time to properly test it)
+#
+start_logging_to_removable_media() {
+	LOG_FILE_NAME_REMOVABLE_MEDIA=rinit-removable-media.log
+	# This is re-initialization that can happen only after we assured that the media is properly mounted
+	if mountpoint $INSTALLER_MEDIA_MOUNT_POINT ; then
+		set -a
+		mkdir -p $INSTALLER_MEDIA_MOUNT_POINT/logs
+		logFile2=$INSTALLER_MEDIA_MOUNT_POINT/logs/$LOG_FILE_NAME_REMOVABLE_MEDIA
+		cat $logFile1 >> $logFile2 # reduandant (especially since once can dmesg, but yeah sure why not)
+		. /commonEnv.sh
+		set +a
+	else
+		error "Won't log to removable media as it is not currently mounted, and we don't want to risk corrupting it"
+	fi
+}
+
+
+
+parse_cmdline() {
+	debug_cmdline
+	for arg in $(cat $cmdline_file); do
+		case $arg in
+			pscgrd.hw.bsp=*)
+				bsp="${arg#*=}"
+				export bsp
+				;;
+			boot=*)
+				boot="${arg#*=}"
+				;;
+			root=*)
+				root="${arg#*=}"
+				;;
+			init=*)
+				init="${arg#*=}"
+				;;
+			overlayfs*)
+				info "overlayfs enabled"
+				tmpworkstr="${arg#*=}"
+				export overlayfs=true
+				# This can be tmpfs for mounting directly over tmpfs. Otherwise, you may set it to an alternate partition that is not systemrw for the upper overlay but it is not recommended
+				export overlayfs_partition=${tmpworkstr%%,*}
+				 # This is relevant ONLY for tmpfs as overlayfs, either as a min overlayfs target or a fallback one (we use the same parameter)
+				export overlayfs_tmpfssize=${tmpworkstr#*,}
+				if [ "$overlayfs_partition" = "overlayfs" ] ; then
+					# handles an 'overlayfs' commnand line parameters (i.e. not overlayfs=)
+					overlayfs_partition=""
+				fi
+				;;
+			remove_previous_overlayfs_contents)
+				# This is not recommended unless you know what you are doing, or troubleshooting (and trying to know what you are doing ;-) )
+				# It depends on your overlayfs design.
+				warn "Removing previous overlayfs contents"
+				export remove_previous_overlayfs_contents=true
+				;;
+			pscgrd.debug.openvts=*)
+				export OPEN_SERIAL_VT_EARLY="${arg#*=}"
+				;;
+			pscgrd.net.autotelnet=*)
+				autotelnet="${arg#*=}"
+				;;
+			stopatramdisk*)
+				# allow for specifying specific places to stop on, and a behavior
+				# exec or spawn/fork (default).
+				# If there is no argument after stopatramdisk= the stopping will be at a default place
+				# otherwise, there may be some "checkpoints" to allow a developer to stop at
+				# this is obviously super debug mode, and absolutely not necessary, but it illustrates
+				# some nice concepts
+				tmpworkstr="${arg#*=}"
+				stopatramdisk=${tmpworkstr%%,*}
+				stopatramdisk_behavior=${tmpworkstr#*,}
+				warn "Stopping at ramdisk: $stopatramdisk / $stopatramdisk_behavior"
+				if [ "$stopatramdisk" = "stopatramdisk" ] ; then
+					# Decide on a default behavior if a stopatramdisk para is given without any further arguments
+					stopatramdisk=pre_rootfs
+					stopatramdisk_behavior=exec
+				fi
+				;;
+			waitforremovablemedia)
+				WAIT_FOR_REMOVABLE_MEDIA=true
+				;;
+			onetimeflasher)
+				ONE_TIME_FLASHER=true
+				;;
+			forceskipinstallermediaflashing)
+				export forceskipinstallermediaflashing=true # can otherwise (in docker) be set by an environment variable
+				;;
+			mountfatrw)
+				mountfatrw=true # TODO: maybe we can just use the mountopt_bootfs instead
+				;;
+			recovery=*)
+				recovery="${arg#*=}"
+				info "recovery=$recovery"
+				;;
+			removablemedia_device=*)
+				removablemedia_device="${arg#*=}"
+				info "removablemedia_device=$removablemedia_device"
+				REMOVABLE_MEDIA_DEVICE=$DEV_BLOCK_FOLDER/$removablemedia_device
+				;;
+			emmc_device=*)
+				emmc_device="${arg#*=}"
+				info "emmc_device=$emmc_device"
+				EMMC_DEVICE=$DEV_BLOCK_FOLDER/$emmc_device
+				;;
+
+			# Allow a boot loader to affect the default partition to flash, and to force an a-only flashing mode
+			installer_boot_partition_number=*)
+				export cmdline_installer_boot_partition_number="${arg#*=}"
+				;;
+			installer_system_partition_number=*)
+				export cmdline_installer_system_partition_number="${arg#*=}"
+				;;
+			installer_a_only=*)
+				export cmdline_installer_a_only="${arg#*=}"
+				;;
+			installer_ab_strategy=*)
+				export INSTALLER_MEDIA_INSTALLER_AB_STRATEGY="${arg#*=}"
+				;;
+			*)
+				call_if_exists additional_parse_args $arg
+				;;
+		esac
+	done
+}
+
+debug_cmdline() {
+	debug "$cmdline_file says $(cat $cmdline_file)"
+	for x in $(cat $cmdline_file) ; do
+		verbose $x
+	done
+}
+
+#
+# This handles the flashing due to a recovery event received from the bootloader
+# One can add all kinds of recovery activities, whether they are related to flashing, to a button, to a userspace reboot command or not
+#
+do_recovery_golden_image_logic() {
+	case "${recovery}" in
+		hardware_buttons|userspace_trigerred)
+			bsp_play_sound_from_file /assets/audio/${recovery}_recovery.wav
+			mount_ota_partitions || { hardError "Failed to mount ota partitions for recovery" ; return 1 ; }
+			do_recovery_sequence || { hardError "Failed to apply recovery logic" ; return 1 ; }
+			;;
+		*)
+			: # ignore any other option and proceed with boot
+			;;
+	esac
+}
+
+#
+# This handles the flashing from a removable media.
+# We can do other stuff, and we can use udev and plug and play rules, but for now we won't
+#
+do_removable_media_logic() {
+	if [ ! "$WAIT_FOR_REMOVABLE_MEDIA" = "true" ] ; then
+		return
+	fi
+
+	bsp_wait_for_removable_media 			# bsp specific placeholder to show your lights, beeps, etc.
+	while [ ! -b "$REMOVABLE_MEDIA_DEVICE" ] ; do
+		warn "Waiting for removable media..."
+		sleep 1
+	done
+	bsp_wait_for_removable_media_done 		# bsp specific placeholder to show your lights, beeps, etc.
+
+	info "Mounting the removable media: LABEL=$INSTALLER_MEDIA_LABEL --> $INSTALLER_MEDIA_MOUNT_POINT"
+	dod_shell mkdir -p $INSTALLER_MEDIA_MOUNT_POINT
+	if [ "$mountfatrw" = "true" ] ; then
+		mount LABEL=$INSTALLER_MEDIA_LABEL $INSTALLER_MEDIA_MOUNT_POINT || warn "Failed to mount. But maybe it was already mounted? \n$(mount)\n\n"
+		start_logging_to_removable_media # TODO see todo in function definition itself [i.e. commonEnv.sh etc.]
+	else
+		mount -o ro LABEL=$INSTALLER_MEDIA_LABEL $INSTALLER_MEDIA_MOUNT_POINT || warn "Failed to mount. But maybe it was already mounted? \n$(mount)\n\n"
+	fi
+
+	# TODO perhaps make optional or remove altoghether
+	debug_run_commands_from_filesystem $INSTALLER_MEDIA_MOUNT_POINT || error "$FUNCNAME: failed to run commands $?"
+
+	# check for the flashing sequence type, if at all, and if need be flash automatically
+	do_autoflash_sequence
+}
+
+
+#
+# OTA update logic
+# Whether we reboot at failure, retry, etc. is left as a decision for the user (or student) to implement
+# For now, unless we reboot, we try to proceed as normal. This means that a persisting failure in OTA will cause a device brick
+# For this reason, we will need to add another layer of counters, for reverting into a well known image, that will self update (e.g. the factory reset)
+#
+do_ota_update_logic() {
+	if mount_ota_partitions ; then
+		debug "Checking for OTA"
+		if ( main_ota_logic ) ; then
+			hardDebug "OTA logic returned without an error. unless there is a bug, it means we can resume the boot sequence"
+			if [ "$docker" = "true" ] ; then
+				warn "docker: not unmounting the OTA partitions - this is done only to allow the operational userspace to have a peek at the bind mounts"
+			else
+				unmount_ota_partitions || warn "OTA partitions were not mounted when trying to unmount them and proceed with ramdisk"
+			fi
+		else
+			hardError "OTA Logic returned an error, and we will not proceed with the rest of init (until we debug it)"
+			fallbackToShell
+		fi
+	else
+		warn "No OTA partitions, OTA is not supported"
+		return 2
+	fi
+}
+
+#
+# Each BSP can provide its own initialization functions. They can be just lights or sounds, screen initialization,
+# and even loading modules or doing very complex stuff. This is a generic place to call a "polymporphic" bsp specific implementation
+#
+init_hardware_dependent_code() {
+	local bsp_init_file=/init-helpers/bsp/$bsp/init.sh
+	source_hardware_dependent_functions
+	call_if_exists bsp_additional_parse_cmdline
+
+	if [ -e $bsp_init_file ] ; then
+		source $bsp_init_file
+		# Run the specific bsp init function. Done in a subshell, to allow the init function to exit if it wants
+		( bsp_${bsp}_init ) || { hardError "bsp_${bsp}_init failed" ; do_fallback_to_shell ; }
+	else
+		verbose "No specific bsp_init_file. For simple uses this should be OK".
+	fi
+
+	# Allow for all kind of emulation tricks for virtual devices
+	call_if_exists bsp_init_blockdev_variables
+}
+
+#
+# Depending on configuration values
+# - opens more ttys (if there is a display)
+# - tries to setup an ethernet device, get dhcp address for it, and enable telnet
+#
+# These are debugging features which are not so good for security...
+#
+do_open_early_shells_and_telnetd() {
+	if [ -n "$OPEN_SERIAL_VT_EARLY" ] ; then
+		open_tty_devices	# see comments inside the function
+	fi
+
+	# This is super insecure. Debugging only! TODO also add a command line parameter for this
+	if [ "$autotelnet" = 1 ] ; then
+		enable_ethernet_via_dhcp_and_passwordless_telnet
+	fi
+}
+
+#
+# Check if the cmdline requested to stop at a specific, so-called-registerd point
+# this is controlled by the stopatramdisk=<point>,<behavior> cmdline argument
+# $1: point to step in. if the command line matches - shell will be brought depending on stopatramdisk_behavior
+#
+debug_stopatramdisk_checkpoint() {
+	if [ "$1" = "$stopatramdisk" ] ; then
+		if [ "$stopatramdisk_behavior" = "exec" ] ; then
+			hardDebug "exec-ing shell ($1). exit it - and your kernel will panic"
+			exec $TTY_SHELL_JOB_CONTROL_PREFIX sh
+		else
+			hardDebug "spawn shell in a subprocess ($1). exit it - and execution will resume"
+			$TTY_SHELL_JOB_CONTROL_PREFIX sh || fatalError "Cannot open debug shell"
+		fi
+	fi
+}
+
+do_rootfs_logic() {
+	debug_stopatramdisk_checkpoint pre_rootfs
+	# Mount the root filesystem and prepare for switch_root
+	dod_shell do_mount_rootfs
+	debug_stopatramdisk_checkpoint pre_switch_root
+	# Do switch_root
+	dod_shell do_switch_root
+}
+
+#
+# Welcome to the main function!
+#
+# Quick note for the first timers and keen kernel log buffer readers:
+# If you see a message like "<exe> (<pid>) used greatest stack depth: <somenumber> bytes left" it is because your kernel is
+# configured with CONFIG_DEBUG_STACK_USAGE=y . Don't worry about it or if you do, reconfigure your kernel
+#
+main() {
+	source /init-helpers/basic-functions.sh 	# basic "linux init related" functions that have no dependencies
+	source /init-helpers/utils.sh				# basic utility functions that have no dependencies
+	source /init-helpers/ttys-and-telnet.sh		# shell fallbacks, virtual consoles, login etc.
+	source /init-helpers/early-dev-debug.sh		# docker enabling, alternative devconfig init, etc.
+
+	source /init-helpers/flashing-activities.sh	# installation media flashing activities
+	source /init-helpers/rootfs-activities.sh	# rootfs mounting and chroot related activities
+
+	source /flasher/config/partitions-emmc.config	# Defines partition names formatting instruction sizes etc. Sourced here as it is easier to maintain one file, and there are variables relevant to both the flasher and anything that uses mounts
+
+	# Sourcing of the ota common definitions is done here to allow other components
+	# to access state variables. This is useful to see if this code is running on a system that we already partitioned.
+	# Since our distro(s) code share the definition files, most of the functions in this file are not relevant at this early point
+	# but some are, and we want to allow all kind of "weird mounting" code, docker code, etc., to kick in very early.
+	# I will try to move this (and check the effect also of moving functions) elsewhere
+	source /flasher/ota/otaCommon.sh
+
+	source /flasher/common-installer-ota-flasher.sh
+	source /flasher/ota/ota-logic.sh
+	source /flasher/recovery-logic.sh
+
+	source /init-helpers/debug-and-flow-changers.sh
+
+	init_env 								# set some default values before beginning
+	mount_basic_virtual_filesystems			# mount the basic filesystems
+	# enumerate_nodes_with_mdev - 			# You can uncomment if your kernel does not enumerate (see comments in function)
+	init_tmp_log_env						# set some logging variable default values before setting up the first printing functions
+
+	source /commonEnv.sh					# Mostly for enabling the logger. Done here after some variables has been initialized
+
+
+	parse_cmdline							# parse command line arguments
+
+	init_hardware_dependent_code			# Setup hardware dependent initializations according to the hardware (bsp) type
+
+	hardInfo "ThePSCG says: \x1b[43minitramfs is now running $bsp!\x1b[0m"
+
+	debug_stopatramdisk_checkpoint pre_recovery
+
+	# Open shells, get dhcp address and open telnetd (all depend on configuration values and hardware)
+	do_open_early_shells_and_telnetd
+
+	# Do the recovery/golden image logic if necessary
+	if ! do_recovery_golden_image_logic ; then
+		warn "You may try to use the installer media and set installer_a_only=true to reflash the system partition from the removable media."
+		warn "Do not boot into recovery mode again if you do so, as recovery takes precedence over the removable media installer "
+		fatalError_do_fallback_to_shell "Failed to do recovery logic. Will not continue booting"
+	fi
+
+	debug_stopatramdisk_checkpoint pre_removable
+
+	# Do the removable media flashing logic, if necessary
+	# The early call to get_state is harmless, if the OTA partitions are not mounted which is the case if it is
+	# the first flashing, and the storage is empty, it will show a warning, and it is intentional.
+	if [ ! "$(get_state)" = "recoveryPendingReflash" ] ; then
+		do_removable_media_logic
+	fi
+
+	debug_stopatramdisk_checkpoint pre_ota
+
+	# Do the software update logic, if necessary.
+	# Our design includes OTA, A/B installer and recovery image flashing as a unified flow which we call OTA
+	# If the logic returns with error, continue to the rootfs anyway.
+	# You can see that this is one of the (only) places that we are not falling back to shell if things don't go our way
+	if ! do_ota_update_logic ; then
+		error "Software update logic returned $?. Will continue booting the current system"
+	fi
+
+	# Mount the necessary partition on the persistent storage device (e.g. eMMC) and switch root to it
+	do_rootfs_logic
+
+
+	# If the flow reaches here, then there have been issues. Revert to shell.
+	do_fallback_to_shell
+}
+
+main $@
+echo -e "\x1b[1;2;3;4;5;6;7;41;30mThis line is unreachable. System will panic\x1b[0m"

@@ -1,0 +1,37 @@
+: ${config_ramdisk__shell_swissknife=busybox} # One could use another swissknife, whether a one exe like busybox, or something else (e.g. via another recipe)
+: ${config_ramdisk_removeprev="true"}
+: ${config_ramdisk_install="true"}
+
+: ${config_ramdisk__compression="cpio.gz"}	# cpio.gz|cpio
+: ${config_ramdisk__verbose_cpio="true"}	# true - Show -v when creating the archive. Can be annoying some times, so giving an option for it to be false
+
+
+: ${config_ramdisk__kexectools_include="false"}	# Copy kexec to ramdisk (and possibly to a smallos based richos)
+: ${config_ramdisk__tinyalsatools_include="true"} # Copy tinyalsa tools to ramdisk (and possibly to a smallos based richos)
+: ${config_ramdisk__assets_include="true"} # Copy some assets (audio, drawables, etc.) to ramdisk (and possibly to a smallos based richos) - mostly for demo purposes
+
+# src/dst - one could use, if it is QEMU, 9p mounts or attach more drives. Our solution is generic though
+: ${config_ramdisk__more_files_to_copy_src=""} # designed mostly to ilustrate kexec - this is a place to copy a capture kernel from
+: ${config_ramdisk__more_files_to_copy_dst=""} # designed mostly to ilustrate kexec - this is a place to copy a capture kernel to (in the target)
+: ${config_ramdisk__directories_to_create=""} # additional directories to create in the ramdisk, mostly to copy files into them, e.g. for kexec capture kernels
+
+: ${config_ramdisk__add_ethernet_network_hooks=true} # copy dhcp scripts and hooks to the ramdisk
+
+
+: ${RAMDISK_BUILD_WORKING_DIRECTORY=$BUILD_DIR/ramdisk}
+
+: ${RAMDISK_TYPE=initramfs} 												# for now we will only support initramfs
+: ${RAMDISK_DIR=$RAMDISK_BUILD_WORKING_DIRECTORY/$RAMDISK_TYPE} 			# be more specific about it being initramfs. I may show an initrd example, e.g. as a walkthrough of the kernel's brd.c
+: ${RAMDISK_PACKED=$RAMDISK_BUILD_WORKING_DIRECTORY/$RAMDISK_TYPE.${config_ramdisk__compression}}
+: ${RAMDISK_PACKED_UBOOT=$RAMDISK_BUILD_WORKING_DIRECTORY/u$RAMDISK_TYPE}
+
+: ${USE_SUDO_IF_NOT_CAPABLE=false} # set to true if you want to change the owner when you build to the one of the super user. This would usually not be necessary, but you may want to apply some more tricks
+: ${config_ramdisk_create_nodes=false}
+
+export config_ramdisk__shell_swissknife config_ramdisk_removeprev config_ramdisk_install
+export config_ramdisk__compression config_ramdisk__verbose_cpio
+export config_ramdisk__kexectools_include config_ramdisk__tinyalsatools_include config_ramdisk__assets_include
+export config_ramdisk__more_files_to_copy_src config_ramdisk__more_files_to_copy_dst config_ramdisk__directories_to_create
+export config_ramdisk__add_ethernet_network_hooks
+export RAMDISK_BUILD_WORKING_DIRECTORY RAMDISK_TYPE RAMDISK_DIR RAMDISK_PACKED RAMDISK_PACKED_UBOOT
+export USE_SUDO_IF_NOT_CAPABLE config_ramdisk_create_nodes

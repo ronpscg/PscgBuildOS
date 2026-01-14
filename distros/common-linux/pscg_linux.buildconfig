@@ -1,0 +1,104 @@
+hardVerbose "FOR NOW ASSUMING QEMU BOOT WITHOUT U-BOOT - IT IS SIMPLY MODIFYING config_bsp__bootloader=<bootloader>"
+
+source $DISTROS_DIR/common/distro.buildconfig
+
+export distro__type=linux
+: ${config_distro__hostname="${config_distro}"}
+export config_distro__hostname
+: ${config_bsp__bootloader=""}
+export config_bsp__bootloader
+
+: ${config_distro__add_oot_ota_code=true}					# add OTA software update mechanism. mechanism is fully functional, and the pattern of adding it is made in an educational way to illustrate several mechanisms of adding code
+: ${config_distro__extra_layers=""}
+: ${config_distro__extra_layers_file=""}
+: ${config_distro__extra_commands_before_image_packing=""}
+
+export config_distro__add_oot_ota_code
+export config_distro__extra_layers config_distro__extra_layers_file config_distro__extra_commands_before_image_packing
+
+# The BUILD_DIR is obvious. the BUILD_SHARED... aimed to be as simple as possible and yet help save time when
+# working on several distros for the same arch. The subarch is subtle and complicates things, and so is mostly used for
+# the bsp layers to handle them, if absolutely necessary (usually not), and to the used cross compiler. In the latter case,
+# it is expected that the user of the build system will know very well what cross toolchains they chose, and why.
+BUILD_DIR=$config_toplevel__product_build_dir_prefix-$ARCH
+BUILD_SHARED_SRC_DIR=$config_toplevel__shared_build_src_dir_prefix
+BUILD_SHARED_ARCH_DIR=$config_toplevel__shared_build_arch_dir_prefix/$ARCH
+if [ -n "$config_toplevel__arch_subarch" ] ; then
+	BUILD_DIR="$BUILD_DIR-$config_toplevel__arch_subarch"
+	BUILD_SHARED_ARCH_SUBARCH_DIR=$BUILD_SHARED_ARCH_DIR-$config_toplevel__arch_subarch
+else
+	BUILD_SHARED_ARCH_SUBARCH_DIR=$BUILD_SHARED_ARCH_DIR
+fi
+
+# The idea is to put ready files, and folders that need to be packed into file system images
+# under a common place. The imager will then create the relevant components and pack them
+# in respective file systems
+#
+# Note that BOOT_DIR is what will be *installed* on the system, while
+# removablemedia_additions
+# would only be on an installation media, e.g. in case you want to have a live CD, have some
+# more drivers or firmawre in it, provide a different kernel, ramdisk, command line, bootloader etc.
+# than the ones would be installed on the emmc (or hard drive etc.)
+#
+export distro__image_materials_workdir=$BUILD_DIR/image_materials_workdir
+
+export distro__image_materials_workdir_specific_linux_modules_and_firmware=${distro__image_materials_workdir}/workdir-specific-linux-modules-and-firmware
+export distro__image_materials_workdir_specific_linux_firmware=${distro__image_materials_workdir_specific_linux_modules_and_firmware}/linux-firmware
+export distro__image_materials_workdir_specific_linux_kernel_modules=${distro__image_materials_workdir_specific_linux_modules_and_firmware}/linux-kernel-modules
+
+export distro__image_materials_installables_workdir=$distro__image_materials_workdir/installables
+export distro__image_materials_removable_media_specifics_dir=$distro__image_materials_workdir/removablemedia_specifics
+
+export distro__image_materials_installables_folders_dir=$distro__image_materials_workdir/installables/folders
+export distro__image_materials_installables_overlays_dir=$distro__image_materials_workdir/installables/overlays
+export distro__image_materials_installables_writableoverlays_dir=$distro__image_materials_workdir/installables/writableoverlays
+
+export distro__image_materials_installables_bootfs_dir=$distro__image_materials_installables_workdir/bootfat
+
+export distro__image_materials_installables_system_dir=$distro__image_materials_installables_workdir/ext4images/${distro__identifier_name}/system
+
+: ${config_distro__prebuilt_image_materials_workdir=""}
+export config_distro__prebuilt_image_materials_workdir
+
+# These are helpers to make it configurable to switch between what goes into the rootfs image, what into its overlay, and what into its writable overlay
+# The style here is deliberatly different, to show another initialization style, and to illustrate that the user can choose any style they want
+# In addition, this helps to illustrate that this is less important (was just hardcoded, for all). If it grows, it may be refactored into another file.
+export config_distro__copy_linux_modules_to_rootfs_method_all_kernel_modules${config_distro__copy_linux_modules_to_rootfs_method_all_kernel_modules:-overlay}
+export config_distro__copy_linux_modules_to_rootfs_method_specific_kernel_modules=${config_distro__copy_linux_modules_to_rootfs_method_specific_kernel_modules:-overlay}
+export config_distro__copy_linux_firmware_to_rootfs_method=${config_distro__copy_linux_firmware_to_rootfs_method:-overlay}
+export config_distro__copy_oot_ota_code_to_rootfs_method=${config_distro__copy_oot_ota_code_to_rootfs_method:-overlay}
+
+
+# This is needed only to allow more optimizations and hacks, but you can otherwise copy from prebuilts.
+# We do a lot of things for development speed, and they are not for everyone, as they leave (intentionally) some things in the build materials.
+# If you set copying method to "direct" (E.g in the statments above) you will need to clean them yourself
+: ${config_distro__cleanup_overlay_tarballs_before_build=true} # you can set it to false if you want to keep previous tarballs, but you should be careful with it
+export config_distro__cleanup_overlay_tarballs_before_build
+
+# The following variables are used within the builder code, in several places, and so are assigned more "standard" names
+# (so it is easy to look at and discuss)"
+BOOT_DIR=$distro__image_materials_installables_bootfs_dir
+ROOTFS_DIR=$distro__image_materials_installables_system_dir
+
+# This may interest other (even non Linux) distros
+REMOVABLE_MEDIA_SPECIFICS_DIR=$distro__image_materials_removable_media_specifics_dir
+
+export BUILD_DIR
+export BUILD_SHARED_SRC_DIR BUILD_SHARED_ARCH_DIR BUILD_SHARED_ARCH_SUBARCH_DIR
+export BOOT_DIR ROOTFS_DIR REMOVABLE_MEDIA_SPECIFICS_DIR
+
+build_distro__make_working_directories_structure() {
+	local DIRS="$BUILD_DIR $BOOT_DIR $ROOTFS_DIR $REMOVABLE_MEDIA_SPECIFICS_DIR"
+	DIRS="$DIRS $BUILD_SHARED_SRC_DIR $BUILD_SHARED_ARCH_SUBARCH_DIR"
+	DIRS="$DIRS $KERNEL_BUILD_WORKING_DIRECTORY"
+	DIRS="$DIRS $BUILD_DIR/$config_ramdisk__shell_swissknife"
+
+	for d in $DIRS ; do
+		if [ ! -d "$d" ] ; then
+			info "Creating $d for the first time"
+			mkdir -p $d || fatalError "Cannot create directory $d"
+		else
+			verbose $d existed
+		fi
+	done
+}

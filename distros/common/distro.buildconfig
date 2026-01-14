@@ -1,0 +1,73 @@
+source $DISTROS_DIR/common/distro_reuse_common.inc
+source $DISTROS_DIR/common/distro_reuse_materials.buildconfig
+source $DISTROS_DIR/common/distro_reuse_build_src_and_arch_intermediates.buildconfig
+
+# TODO add to debootstrap scripts: /proc/ is not mounted, but required for successful operation of systemd-tmpfiles. Please mount /proc/. Alternatively, consider using the --root= or --image= switches.
+
+#
+# The objective here is to set the default variables for the distro without modifying the original files,
+# in case the BSP layer is not specifically set, the assumption is that QEMU is to be used.
+# While I wanted to allow code reuse, the Debian/Ubuntu shenanigans are irrelevant to other distros,
+# so I am not doing everything in one place, at the 'risk' of code duplication.
+#
+# Read the arch document for more explanations about everything. Since this is strictly QEMU oriented,
+# note that the following are symlinks in QEMU:
+# qemu-system-armhf --> qemu-system-armhf
+# qemu-system-armel --> qemu-system-armhf
+# qemu-system-arm64 --> qemu-system-aarch64
+# qemu-system-loong64 --> qemu-system-loongarch64
+#
+# Do note that the build system itself only supports ARCH=<...> for the kernel code architectures,
+# and the rest are like "subarchs" - so this might be cleaned up later.
+# I suppose that the first public release of the this build system will be before retesting the subarchs,
+# so the names are left
+#
+# TODO: when done and reasonably tested (i.e. after rechecking installations, OTA, etc.)
+#
+distro_common___set_arch_specific_variables_if_needed() {
+	local bspname_archnamefixup
+	case $ARCH in
+		arm64|aarch64)
+			bspname_archnamefixup=arm64
+			;;
+		riscv|riscv64)
+			# TODO: the name is riscv64
+			bspname_archnamefixup=riscv64
+			;;
+		arm|armhf|armel)
+			# TODO: the bsp has been selected to be armhf because of Debian - but ARCH is definitely arm
+			bspname_archnamefixup=armhf
+			;;
+		armel)
+			fatalError "Need to double check if that works for Ubuntu. I think it only works for Debian so for now I am failing this case"
+			bspname_archnamefixup=armhf
+			;;
+		x86_64)
+			bspname_archnamefixup=amd64
+			;;
+		i386|i686)
+			bspname_archnamefixup=i686 # TODO: it is now a link to the same qemu of amd64 - which is perfect for the default configuration
+			;;
+		loongarch|loongarch64|loong64)
+			bspname_archnamefixup=loongarch64 # deliberatley - different name from Debian as I want to break it from the other conventions
+			;;
+		s390)
+			bspname_archnamefixup=s390x
+			;;
+		powerpc)
+			# Do note that PowerPC is bi-endian. Also note, that most modern processors and tools use little-endian by default.
+			# We chose the little-endian as the reference example port, because of the rootfs support of Debian and AlpineOS.
+			# BusyboxOS and our external static tool build support everything PowerPC, so it should be trivial for you to implement it yourself should you need it.
+			bspname_archnamefixup=ppc64le	# Note: le and el would be the same, all project have different names here also in terms of powerpc/ppc.
+			;;
+		sparc64)
+			bspname_archnamefixup=sparc64
+			;;
+		*)
+			fatalError "${BASH_SOURCE[0]} Unsupported ARCH $ARCH"
+			;;
+	esac
+
+	export config_bsp_layer=bsp/recipes/linux/bsp-pscg_debos-qemu-$bspname_archnamefixup
+}
+distro_common___set_arch_specific_variables_if_needed

@@ -1,0 +1,179 @@
+
+# The objectives of these definition files are to:
+# 1. Avoid clutter in other files
+# 2. Provide several configuration mechanisms for reusing build materials made by other distros, without complicating caches mechanisms,
+#    While developing.
+#
+# Practical note: in practice, every CI/CD mechanism in (almost) every company will redo everything from scratch,
+# so there is less sense in the effort made to keep the different caches. At least not for now.
+#
+# The objectives of the definitions in this file are *different* than the distro_reuse_materials respective files,
+# in terms that they are meant to reuse build intermediates as part of the build, and allow
+# several degrees of freedom of using either source, built data, or none, whereas the distro_reuse_build_materials
+# mostly aim to support reusing of built components so that they are skipped in the build phases
+# and one could just package them without building.
+#
+# The reusing here will build, even if completely using previous build artifacts. Obviously, this
+# can result in different timestamping, and different binaries, so you need to think if you want to do that
+# these are some of the considerations you will meet when designing a build system, or choose
+# features in a production grade one.
+
+
+init_env_reuse_build_src_intermediates() {
+	if [ ! "$config_distro__reuse_shared_src" = "true" ] ; then
+		debug "No need to reuse materials for shared src"
+		return # Nothing to do
+	fi
+
+	# We will go for an all or nothing approach in reusal,
+	# and the distro builder will have to be aware of that, so do not provide a default value for the reusing methods
+	export config_distro__shared_src_reusing_method
+	: ${config_distro__shared_src_reusing_method=""}
+
+	# force values for code brevity. one could alternatively do if-elses as with the materials reusing but it's unnecessarily long
+	if [ -z "$config_distro__shared_src_reusing_method" ] ; then
+		fatalError "If you wish to reuse, you must provide config_distro__shared_src_reusing_method=<copy|symlink|hardlink>"
+	fi
+
+
+	# This is for architecture independent work, like first extraction of a busybox source code or Linux kernel source code
+	export config_distro__reuse_shared_src_busybox
+	export config_distro__reuse_shared_src_ramdisk
+	export config_distro__reuse_shared_src_kernel
+	: ${config_distro__reuse_shared_src_busybox=true}
+	: ${config_distro__reuse_shared_src_ramdisk=false}
+	: ${config_distro__reuse_shared_src_kernel=true}
+}
+
+init_env_reuse_build_arch_intermediates() {
+	if [ ! "$config_distro__reuse_shared_arch" = "true" ] ; then
+		debug "No need to reuse materials for shared arch"
+		return # Nothing to do
+	fi
+
+	# We will go for an all or nothing approach in reusal,
+	# and the distro builder will have to be aware of that, so do not provide a default value for the reusing methods
+	export config_distro__shared_arch_reusing_method
+	: ${config_distro__shared_arch_reusing_method=""}
+	if [ -z "$config_distro__shared_arch_reusing_method" ] ; then
+		fatalError "If you wish to reuse, you must provide config_distro__shared_arch_reusing_method=<copy|symlink|hardlink>"
+	fi
+
+	# This is for architecture dependent work, like build or install of a specific architecture/BSP code
+	# We will not get into the resolution of specific toolchains, as far as we are concerned the arch and subarch are representative,
+	# and if it is not the case, and you need this (e.g. hard/soft floating-point support etc.), you are welcome to introduce your changes
+	# This is for architecture dependent work
+	export config_distro__reuse_shared_arch_busybox
+	export config_distro__reuse_shared_arch_ramdisk
+	export config_distro__reuse_shared_arch_kernel
+	: ${config_distro__reuse_shared_arch_busybox=true}
+	: ${config_distro__reuse_shared_arch_ramdisk=false}
+	: ${config_distro__reuse_shared_arch_kernel=true}
+}
+
+
+#
+# This is different then the other reusals, where we just wanted to populate the image materials, no matter what. (which could be a mistake perhaps?)
+# Since this is set before the fetch/unpack phases, we only want to create links here.
+#
+reuse_build_src_kernel() {
+	if [ ! "$config_buildtasks__do_build_kernel" = "true" ] ; then
+		return
+	fi
+	if [ ! "$config_distro__reuse_shared_src_kernel" = "true" ] ; then
+		return
+	fi
+
+	if [ "$config_kernel__fetch_git_or_tarball" = "tarball" ] ; then
+		KERNEL_SOURCE_PARENT_DIR=$BUILD_SHARED_SRC_DIR
+	fi
+
+	: ${BUILD_SHARED_LINUX_SOURCE_DIR=$BUILD_SHARED_SRC_DIR/linux-kernel-src}
+	debug_do_or_die remove_target_and_link_if_src_exists $BUILD_SHARED_LINUX_SOURCE_DIR $LINUX_SOURCE_DIR $config_distro__shared_src_reusing_method allowlinktononexistent
+	LINUX_SOURCE_DIR=$BUILD_SHARED_LINUX_SOURCE_DIR
+}
+
+reuse_build_arch_kernel() {
+	if [ ! "$config_buildtasks__do_build_kernel" = "true" ] ; then
+		return
+	fi
+	if [ ! "$config_distro__reuse_shared_arch_kernel" = "true" ] ; then
+		return
+	fi
+
+	# We will only reuse the kernel build here. All installations will go into the specific products, as they are fast to build
+	: ${BUILD_SHARED_LINUX_BUILD_DIR=$BUILD_SHARED_ARCH_SUBARCH_DIR/linux-kernel-build}
+
+	debug_do_or_die remove_target_and_link_if_src_exists $BUILD_SHARED_LINUX_BUILD_DIR $LINUX_BUILD_DIR $config_distro__shared_arch_reusing_method allowlinktononexistent
+
+	LINUX_BUILD_DIR=$BUILD_SHARED_LINUX_BUILD_DIR
+}
+
+
+reuse_build_src_busybox() {
+	# TODO: this assumes buildig as the ramdisk. we will not handle reusing if not building a ramdisk for now (although we could add a separate step)
+	if [ ! "$config_buildtasks__do_build_ramdisk" = "true" ] ; then
+		return
+	fi
+	if [ ! "$config_distro__reuse_shared_src_busybox" = "true" ] ; then
+		return
+	fi
+
+	if [ "$config_busybox__fetch_git_or_tarball" = "tarball" ] ; then
+		BUSYBOX_SOURCE_PARENT_DIR=$BUILD_SHARED_SRC_DIR
+	fi
+	: ${BUILD_SHARED_BUSYBOX_SOURCE_DIR=$BUILD_SHARED_SRC_DIR/busybox-src}
+
+	debug_do_or_die remove_target_and_link_if_src_exists $BUILD_SHARED_BUSYBOX_SOURCE_DIR $BUSYBOX_SOURCE_DIR $config_distro__shared_src_reusing_method allowlinktononexistent
+	BUSYBOX_SOURCE_DIR=$BUILD_SHARED_BUSYBOX_SOURCE_DIR
+}
+
+reuse_build_arch_busybox() {
+	# TODO: this assumes buildig as the ramdisk. we will not handle reusing if not building a ramdisk for now (although we could add a separate step)
+	if [ ! "$config_buildtasks__do_build_ramdisk" = "true" ] ; then
+		return
+	fi
+	if [ ! "$config_distro__reuse_shared_arch_busybox" = "true" ] ; then
+		return
+	fi
+
+
+	: ${BUILD_SHARED_BUSYBOX_BUILD_DIR=$BUILD_SHARED_ARCH_SUBARCH_DIR/busybox-build}
+
+	debug_do_or_die remove_target_and_link_if_src_exists $BUILD_SHARED_BUSYBOX_BUILD_DIR $BUSYBOX_BUILD_DIR $config_distro__shared_arch_reusing_method allowlinktononexistent
+	BUSYBOX_BUILD_DIR=$BUILD_SHARED_BUSYBOX_BUILD_DIR
+}
+
+reuse_build_src_ramdisk() {
+	: # place holder if we want to do more things inside the ramdisk (most probably not, as this step is very fast, and hardly consumes any disk space)
+}
+
+reuse_build_arch_ramdisk() {
+	: # place holder if we want to do more things inside the ramdisk (most probably not, as this step is very fast, and hardly consumes any disk space)
+}
+
+reuse_build_src_misc() {
+	: # place holder for other components
+}
+
+reuse_build_arch_misc() {
+	: : # place holder for other components
+}
+
+# Super important notes about reusing intermediates:
+
+# Note: if the specific project has a specific fork for a specific architecture on the source code, we will not support it
+#	    instead, it should NOT reuse the src.In our regular, non-optimizing case, we support the latter by, e.g:
+#		1. Extracting busybox and ramdisk again, and maintaining a copy of the source per product
+#		2. (shallow) cloning the kernel repository (or extracting, if a tarball configuration) and maintaining a copy of the source per product
+#		   This is necessary if a specific commit is needed - but it is impossible to meet all possible constraints and achieving both reusal, and differentiation
+#
+reuse_build_src_intermediates() {
+	reuse_build_src_kernel
+	reuse_build_src_busybox
+}
+
+reuse_build_arch_intermediates() {
+	reuse_build_arch_kernel
+	reuse_build_arch_busybox
+}

@@ -1,0 +1,14 @@
+config_kernel__list_of_defconfigs="defconfig virt.config"
+: ${config_kernel__list_of_config_overrides=""}
+: ${config_kernel__list_of_config_fragments=""}
+: ${config_kernel__kernel_image_type=Image}
+
+export config_kernel__list_of_defconfigs config_kernel__list_of_config_overrides config_kernel__list_of_config_fragments config_kernel__kernel_image_type
+
+#
+# Implement this variable if you would like to override the behavior of the common kernel buildconfig
+#
+kernel__specific_init_fetch_unpack_variables() {
+	:
+}
+export -f kernel__specific_init_fetch_unpack_variables

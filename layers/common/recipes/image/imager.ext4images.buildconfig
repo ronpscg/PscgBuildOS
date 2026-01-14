@@ -1,0 +1,46 @@
+#
+# sets some default configuration values and options
+#
+# Tuning is an art, and filesystem tunables require knowing what you want to achieve.
+#
+init_env_ext_partition_tunables() {
+
+	### Some filesystem tunables
+	: ${config_imager__ext_partition_system_tunables_has_journal=false}			# true/false
+	: ${config_imager__ext_partition_system_tunables_inode_size=128}			# integral power of 2. minimum 128 (and then timestamps are supported until 2038)
+	: ${config_imager__ext_partition_system_tunables_reserved_space=0}			# reserve for superuser/quota. 0 if you don't need anything on it
+	: ${config_imager__ext_partition_system_tunables_bytes_per_inode="$((1024*1024))"}		# set if you know the ratio you want to have - you need to know if the filesystem will have big files, many small files etc. if you have many small files you need a smaller value, and you'll have more overhead for the inode table
+	: ${config_imager__ext_partition_system_tunables_more_options=""}			# This is the catchall
+
+	export config_imager__ext_partition_system_tunables_has_journal config_imager__ext_partition_system_tunables_inode_size config_imager__ext_partition_system_tunables_reserved_space config_imager__ext_partition_system_tunables_more_options
+
+	### Size calculation and estimation
+	# This is the default option if assigned. If it's wrong - build will fail
+	: ${config__imager__ext_partition_system_size_bytes=""} 						# if empty or 0 - automatically calculate according to heuristic. otherwise, set to this size
+	export config__imager__ext_partition_system_size_bytes
+
+	# This is used as margin for the second option (estimating). If the estimate is less minimum_size_bytes - the minimum_size_bytes will be used
+	: ${config_imager__ext_partition_system_size_scale_factor=1.07} 				# A scale factor used only if config__imager__ext_partition_system_size_bytes is not set. If the file system is tiny 1.05 could work too, for most cases 1.15 wouldn't work, so if you count on the scale factor - adjust it externally. I deliberately don't include a number big enough. I want you to fail, until you learn the meaning of sizing!
+	export config_imager__ext_partition_system_size_scale_factor
+	# This is the minimum allowed file system size, and will be used if the folder size * scale_factor is less than this value
+	# The number in this example is arbitrary, fits a busyboxos or alpine rootfs (actually, 8.146MiB would work for an x86_64 v3.19 of its minimal rootfs), and would definitely not fit Debian
+	: ${config_imager__ext_partition_system_minimum_size_bytes=$(printf "%.f" $(echo 8.567*1024*1024 | bc))} 	# We will not allow creation of a system partition that is lower than this number
+	export config_imager__ext_partition_system_minimum_size_bytes
+
+	### Convert the some of the configs to mkfs jargone
+	if [ "$config_imager__ext_partition_system_tunables_has_journal" = "false" ] ; then
+		imager__ext_partition_system_tunables_options="-O ^has_journal"
+	fi
+
+	if [ -n "$config_imager__ext_partition_system_tunables_inode_size" ] ; then
+		imager__ext_partition_system_tunables_options="$imager__ext_partition_system_tunables_options -I $config_imager__ext_partition_system_tunables_inode_size"
+	fi
+
+	if [ -n "$config_imager__ext_partition_system_tunables_reserved_space" ] ; then
+		imager__ext_partition_system_tunables_options="$imager__ext_partition_system_tunables_options -m $config_imager__ext_partition_system_tunables_reserved_space"
+	fi
+
+	export imager__ext_partition_system_tunables_options="$imager__ext_partition_system_tunables_options $config_imager__ext_partition_system_tunables_more_options"
+}
+
+export -f init_env_ext_partition_tunables

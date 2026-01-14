@@ -1,0 +1,123 @@
+##### Variable definitions that are to be known across the entire build system
+# Note the differences between downloads, prebulits and caches:
+# 	Caches refer to "something has been done for the build" and are usually architecture dependent
+#	Downloads are usually tarballs or git repos, usually containing sources or configuration files
+#	Prebuilts are prebuilts such as [cross-]toolchains (which we will not host in the published repo, but we build them in the PSCG's Embedded Linux course) and architecture dependent biaries (such as e2fsprogs and dosfstools for busybox based ramdisks, etc. - although we can build them from source if we wanted to - it's just more things to explain, and we hardly ever need all of them)
+#
+#	Caches are meant to be used as is, so you can take them and copy to another host
+#   Caches workdir, are working directories used to create the caches, so they are not needed, e.g. if you pass them to another host
+: ${config_toplevel__build_offline=""}													# true/false
+: ${config_toplevel__downloads_base_path=$HOST_CACHES_BASE_DIR/downloads_dir}			# Where downloads such as source code and tarballs are saved
+: ${config_toplevel__prebuilts_base_path=""}											# (unused) Unless there are very specific prebuilts that come from other places, prebuilts will be stored here (likely architecture dependent)
+: ${config_toplevel__caches_base_path=$HOST_CACHES_BASE_DIR/caches_dir}					# Unless there are very specific build material caches, that come from other places, caches (e.g. debootstrap packages etc.)  will be stored here (likely architecture dependent)
+: ${config_toplevel__caches_workdir_base_path=$HOST_CACHES_BASE_DIR/caches_workdir}		# Unless there are very specific build material caches, that come from other places, caches workdir (e.g. debootstrap packages etc.)  will be stored here (likely architecture dependent)
+
+: ${config_toplevel__include_date_in_build_version=true}								# Set to false to replace the image files after each build - this can be very useful and save a lot of storage space
+
+
+
+
+: ${config_toplevel__rebuild_from_scratch_product=false}			# Delete the entire product build folder (BUILD_DIR)
+: ${config_toplevel__rebuild_from_scratch_all=false}				# Delete the entire BUILD_OUT product
+export config_toplevel__rebuild_from_scratch_product config_toplevel__rebuild_from_scratch_all
+
+export config_toplevel__build_offline
+export config_toplevel__downloads_base_path config_toplevel__prebuilts_base_path
+export config_toplevel__caches_base_path config_toplevel__caches_workdir_base_path
+export config_toplevel__include_date_in_build_version
+
+: ${config_toplevel__oot_dir=$(readlink -f $BUILD_TOP/../oot/)}		# folder where out of tree projects will be looked for. they can have our mechanisms (add-layer et. al) and one can just call custom commands on them, but know the mechanism
+export config_toplevel__oot_dir
+
+# Trivial check of variable values.
+toplevel__buildconfig_sanity_check() {
+	local error=false # this is an example of variables and functions can have the same name and be treated differently. In general - don't do this, it's a bad practice!
+	local vars
+
+	vars="config_toplevel__downloads_base_path 			\
+		config_toplevel__caches_base_path				\
+		config_toplevel__caches_workdir_base_path		\
+		ARCH"
+
+	for v in ${vars} ; do
+		if [ -z "$(eval echo \$$v)" ] ; then
+			error "$v is unset. Please set it before invoking the build system"
+			error=true
+		fi
+	done
+
+	[ "$error" = "true" ] && fatalError "Sanity check failed"
+}
+export -f toplevel__buildconfig_sanity_check # We don't really to export these functions as the file is being sourced from the only place it is being used in
+
+
+toplevel__make_working_directories_structure() {
+	local DIRS="$config_toplevel__downloads_base_path 				\
+				$config_toplevel__prebuilts_base_path 				\
+				$config_toplevel__caches_base_path					\
+				$config_toplevel__caches_base_path/$ARCH			\
+				$config_toplevel__caches_workdir_base_path			\
+				$config_toplevel__caches_workdir_base_path/$ARCH	\
+																	\
+	"
+
+	for d in $DIRS ; do
+
+		if [ ! -d "$d" ] ; then
+			info "Creating $d for the first time"
+			mkdir -p $d || fatalError "Cannot create directory $d"
+		else
+			verbose $d existed
+		fi
+	done
+}
+export -f toplevel__make_working_directories_structure
+
+toplevel__set_arch_and_bsp_variables() {
+	source_file_or_die $BUILD_TOP/config/toplevel.arch.buildconfig
+	toplevel__adjust_arch_resolve_config_disagreements
+	toplevel__set_crosscompile_variables_if_needed # done first in order to unset CROSS_COMPILE in case ARCH is unset, so that in case there are several native compilers, the default is selected, without cross compilation
+	if [ -z "$ARCH" ] ; then
+		toplevel__set_arch_variable_for_native_build_if_needed # see previous comments, more of similiar things
+	fi
+}
+export -f toplevel__set_arch_and_bsp_variables
+
+# Note: this is redundant and calculatd like a thousand times. I don't want to touch the other logic
+#       this is specifically implemented to export ARCH_SUBARCH in a way that would mostly serve the imager
+# 		int its paths. it is defined here only because it is close enough to the toplevel__set_build_image_version function so it's easier to learn them together
+toplevel__set_global_ARCH_SUBARCH_variable() {
+	if [ -z "$config_toplevel__arch" ] ; then
+    	ARCH_SUBARCH_STRING=${ARCH:-$(uname -m)}
+	else
+		# consider subarch only if config_toplevel_arch is explicitly stated
+		if [ -z "$ARCH" ] ; then
+			ARCH_SUBARCH_STRING=$config_toplevel__arch
+		else
+			if [ ! "$ARCH" = "$config_toplevel__arch" ] ; then
+				fatalError "ARCH and  config_toplevel__arch don't agree"
+			fi
+			ARCH_SUBARCH_STRING=$ARCH
+		fi
+
+		if [ -n "$config_toplevel__arch_subarch" ] ; then
+			ARCH_SUBARCH_STRING="${ARCH_SUBARCH_STRING}-$config_toplevel__arch_subarch"
+		fi
+	fi
+}
+export -f toplevel__set_global_ARCH_SUBARCH_variable
+
+toplevel__set_build_image_version() {
+		if [ -n "$BUILD_IMAGE_VERSION" ] ; then
+			verbose "BUILD_IMAGE_VERSION set externally to $BUILD_IMAGE_VERSION"
+			return
+		fi
+
+		: ${BUILD_IMAGE_VERSION_EXTRA=""}
+		: ${BUILD_IMAGE_VERSION="${config_distro}-${ARCH_SUBARCH_STRING}${BUILD_IMAGE_VERSION_EXTRA}"}
+
+		if [ "$config_toplevel__include_date_in_build_version" = "true" ] ; then
+			BUILD_IMAGE_VERSION="$BUILD_IMAGE_VERSION-$(date +%Y%m%d%H%M%S)"		# The version of the image, used for the tarball name and the working directory
+		fi
+}
+export -f toplevel__set_build_image_version

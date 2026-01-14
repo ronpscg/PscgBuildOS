@@ -1,0 +1,72 @@
+: ${config_bsp__qemu_generated_runqemu_folder=$config_toplevel__shared_artifacts/runqemus/$distro__identifier_name}
+: ${config_bsp__qemu_storage_device_path=""}		# Reusing the storage device can save countless storage on your host, if you don't really need to keep multiple systems in a given time
+: ${config_bsp__qemu_storage_device_size_mib=""}	# e.g. 1024 would be 1024MiB
+: ${config_bsp__qemu_recreate_storage_device=""}	# Recreate the storage device. You usually don't want to do it, just dd from outside whatever you want
+: ${config_bsp__qemu_storage_device_size_autoadjust="true"} # auto adjust size if the provided size for the storage is too small
+
+: ${config_bsp__qemu_removable_media_path=""}		# This would be your installer device - however, you might want to copy it and not use as is (e.g. if you want to do onetimeflasher etc, mount the installable media as rw etc.)
+: ${config_bsp__qemu_copy_installer_image_to_removable_media=""}		# set to true if you want to copy the removable media and not reuse it
+
+
+: ${config_bsp__qemu_create_storage_device_with_default_path_if_need_be=false}
+if [ "$config_bsp__qemu_recreate_storage_device" = "true" -a "$config_bsp__qemu_create_storage_device_with_default_path_if_need_be" = "true" ] ; then
+	if [ -z "$config_bsp__qemu_storage_device_path" ] ; then
+		: ${config_bsp__qemu_storage_device_path:=${config_toplevel__shared_artifacts}/qemustorage-images/pscgbuildos_storage-${ARCH_SUBARCH_STRING}.img}
+	fi
+else
+	: ${config_bsp__qemu_storage_device_path=""} # if empty, no storage image will be created. Otherwise, stores the path to the storage image
+fi
+
+
+: ${config_bsp__qemu_create_livecd_with_default_path_if_need_be=false} # this is not needed if a path is used, but if not, and it's true, a default path will be made
+if [ "$config_bsp__qemu_create_livecd_with_default_path_if_need_be" = "true" ] ; then
+	if [ -z "$config_bsp__qemu_livecd_storage_device_path" ] ; then
+		: ${config_bsp__qemu_livecd_storage_device_path:=${config_toplevel__shared_artifacts}/qemustorage-images/pscgbuildos_storage_livecd-${BUILD_IMAGE_VERSION}.img}
+	fi
+else
+	: ${config_bsp__qemu_livecd_storage_device_path=""} # if empty, no livecd (live_image) wil be created. Otherwise, stores the path to the live image
+fi
+
+: ${config_bsp__qemu_livecd_extract_system_overlays_into_live_image="true"} # if true, the overlays will be extracted into the live image, otherwise you can get them only upon installation
+
+export config_bsp__qemu_generated_runqemu_folder config_bsp__qemu_storage_device_size_mib
+export config_bsp__qemu_create_storage_device_with_default_path_if_need_be config_bsp__qemu_storage_device_path config_bsp__qemu_recreate_storage_device config_bsp__qemu_storage_device_size_autoadjust
+export config_bsp__qemu_removable_media_path config_bsp__qemu_copy_installer_image_to_removable_media
+export config_bsp__qemu_create_livecd_with_default_path_if_need_be config_bsp__qemu_livecd_storage_device_path config_bsp__qemu_livecd_extract_system_overlays_into_live_image
+
+#----------------------------------------------------------------------
+# The parameter below are more of the kernel cmdline, peripherals and
+# low level configuration in QEMU, as well as other things that are not
+# storage paths related
+#----------------------------------------------------------------------
+: ${config_bsp__qemu_machine=""}						# to specify:  -M <machine type>
+: ${config_bsp__qemu_cpu=""}							# to specify: -cpu <type>
+: ${config_bsp__qemu_smp=""}							# to specify: -smp <count>
+: ${config_bsp__qemu_memory=""}							# to specify -m <size, e.g. 4G etc.>
+
+# Note: This default value is needed for arm BSP mostly, but we set a very nice minimal config that builds faster and can be used. It is very minimal,
+# and does not include many things (like overlays, debuggers, tracers, and much more), but as it provides a fast buildable reference for all platforms,
+# I am now setting it as the default (TODO: not heavily tested yet)
+: ${config_bsp__qemu_storage_use_virtio=true}  			# see comment above
+: ${config_bsp__qemu_console_use_virtio=true}  			# see comment above
+: ${config_bsp__qemu_network_use_virtio=true}  			# see comment above
+
+: ${config_bsp_qemu__devices_console_params=""} 		# e.g. -nographic , -serial mon:stdio , etc.
+: ${config_bsp_qemu__devices_graphics_params=""} 		# e.g.: -display gtk,gl=on -device virtio-gpu -vga none
+: ${config_bsp_qemu__devices_audio_params=""}			# e.g.: -device virtio-sound-device -audio pipewire,id=snd0
+: ${config_bsp_qemu__devices_input_params=""} 	 		# e.g.: -usbdevice tablet"
+: ${config_bsp_qemu__devices_network_params=""} 	 	# e.g.: -net ...
+: ${config_bsp_qemu__devices_more_devices_params_0=""}	# placeholder for more devices
+: ${config_bsp_qemu__devices_more_devices_params_1=""}	# placeholder for more devices
+: ${config_bsp_qemu__kernel_cmdline=""}					# default command line - some more defaults will be appended to it unless COMPLETE_COMMAND_LINE_OVERRIDE=true
+: ${config_bsp_qemu__complete_command_line_override="false"} # if true the value of CMDLINE (either provided in the build, or by environmenmt variable) will be used as is, without appending the defaults.
+# we can add more and more...
+
+: ${config_bsp_qemu_kernel_image_use_vmlinux="false"} 	# if true, the kernel image will be vmlinux, otherwise it will be the default kernel image (e.g. zImage, Image, etc.)
+
+export config_bsp__qemu_machine config_bsp__qemu_cpu config_bsp__qemu_smp config_bsp__qemu_memory
+export config_bsp__qemu_storage_use_virtio config_bsp__qemu_console_use_virtio config_bsp__qemu_network_use_virtio
+export config_bsp_qemu__devices_console_params config_bsp_qemu__devices_graphics_params config_bsp_qemu__devices_audio_params
+export config_bsp_qemu__devices_input_params config_bsp_qemu__devices_network_params
+export config_bsp_qemu__devices_more_devices_params_0 config_bsp_qemu__devices_more_devices_params_1
+export config_bsp_qemu__kernel_cmdline config_bsp_qemu__complete_command_line_override config_bsp_qemu_kernel_image_use_vmlinux

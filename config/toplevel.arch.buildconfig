@@ -1,0 +1,313 @@
+# This file defines architecture configurations and overriding
+# The rationale is to isolate generic handling of architecture for de facto standards as the Linux kernel and busybox
+# from the jargone used by each project or distro, which sometimes support specific architecture subtypes (or classes, families, etc...)
+# and we will let them redefine some of the parameters.
+# Just setting and resetting ARCH may cause some elements to tamper other elements, and not doing so can result in much repetitions,
+# so we chose a combined approach
+#
+# MacOS and Apple Silicon notes: We assume you do not build directly with Darwin. It shouldn't be too hard to adapt the code,
+# but for now, we want Linux first, and so uname -m returns aarch64, whereas in Darwin (MacOS) it returns arm64. I preferred
+# to not be tidious in the code. If there are tons of MacOS users, we can adapt it later.
+#
+
+##### Architecture and cross toolchain definitions- . the consumers for now are the kernel builder and busybox builder (U-Boot and perhaps other bootloaders will be added later on)
+
+
+# Unless the users really know what they want, we would not expect them to provide something more than ARCH and CROSS_COMPILE
+# but they might know what they want, or use projects that require being more specific (e.g. armv5 vs armv7 vs armhf vs... cortex-m, cortex-a, cortex-r, etc.)
+# We give priority to the kernel build system names, which means, e.g. that ARCH which is aarch64 becomes arm64
+# However, we make sure to set variables names that would represent the correct tupple part (e.g. for CROSS_COMPILE) and running parts (e.g. for QEMU bsp)
+# Each distro, or bsp tupple, would take care of their own.
+#
+# In the particular case of QEMU and common distro provided toolchains, we will set some defaults here as well.
+# We will also try to "protect" the user from making mistakes, e.g. by adjusting ARCH and CROSS_COMPILE to the right value
+# when the intention is obvious,or by providing them with further config_toplevel_arch_... tips and failing the build otherwise,
+# or when there is a risk of reusing the wrong toolchain (e.g. arm vs armhf, etc.)
+#
+# There are quite a bit of lines here, that don't do much, just help to avoid further mistakes later.
+#
+# The caller flow is expected to be as follows:
+# 1. toplevel__adjust_arch_resolve_config_disagreements
+# 2. toplevel__set_crosscompile_variables_if_needed
+# 3. toplevel__set_arch_variable_for_native_build_if_needed
+
+: ${config_toplevel__arch=$ARCH}
+: ${config_toplevel__arch_subarch=""}	# subarch is not an accurate term, but we will use it, mostly for rootfs and some other tools
+
+
+export toplevel__arch_crosscompile=""	#TODO not sure I will use respective part of the CROSS_COMPILE tupple - set by this script (e.g. force aarch64 when the kernel ARCH is arm64 )
+
+export config_toplevel__arch config_toplevel__arch_subarch
+export config_toplevel__arch_before_adjusting=$ARCH	# will be used to keep the original ARCH value as it is adjusted sometimes  TODO probably temporary
+
+# Other architecture values will be handled by projects that may need them
+
+#
+# This is a "best effort" to resolve disagreements. It was only added to allow providing subarch, for some distros
+# In general, only providing ARCH and CROSS_COMPILE, or deciding that they are native would suffice, but we want to allow for
+# more specializations (imagine someone wants a very specific distro, that was highly optimized for some subarch, etc.)
+#
+# This is likely to be undermaintained, and is added as a first time effort (except for an example in Alpine I don't know if anyone would
+# ever use it, which is a case for another lesson - don't bother to build features if there aren't customers for them, huh)
+#
+# In previous versions, we adjusted the ARCH variable in case it didn't match what the Linux kernel build system expects.
+# In case of building other operating systems, it is likely you would want to NOT call this function.
+# The function is meant to "protect" the user from making mistakes.
+#
+# returns 1 if there were no variables provided to define the arch or subarch and then it is a native build, 0 otherwise
+#
+toplevel__adjust_arch_resolve_config_disagreements() {
+	debug "These are your architecture variables \n$(printvars ARCH config_toplevel__arch config_toplevel__arch_subarch)"
+
+	if [ -n "$config_toplevel__arch" -a -z "$ARCH" ] ; then
+		warn "empty ARCH - setting to $config_toplevel__arch"
+		ARCH=$config_toplevel__arch
+	elif [ -z "$config_toplevel__arch" -a -n "$ARCH" ] ; then
+		warn "empty config_toplevel__arch - setting to $ARCH"
+		config_toplevel__arch=$ARCH
+	elif [ -z "$config_toplevel__arch" -a -z "$ARCH" ] ; then
+		warn "No ARCH or config_toplevel__arch were provided"
+		if [ -z "$config_toplevel__arch_subarch" ] ; then
+			warn "Will determine ARCH as the native arch, and not use any subarch"
+			return 1
+		else
+			warn "ARCH and config_toplevel__arch will be set by config_toplevel_subarch ($config_toplevel_subarch)"
+		fi
+	else
+		if [ ! "$config_toplevel__arch" = "$ARCH" ] ; then
+			fatalError "Please provide the same ARCH and config_toplevel__arch if you intend to provide a subarch."
+		fi
+	fi
+
+	case "$config_toplevel__arch_subarch" in
+		"")
+			# don't do anything in this case
+			;;
+		i386|i486|i586|i686|x86)
+			if [ -z "$ARCH" ] ; then
+				ARCH=x86	# TODO this logic needs to be redefined as I think we only use ARCH as it is in the subsequent scripts
+			elif [ ! "$ARCH" = "x86" ] ; then
+				fatalError "Invalid subarch $config_toplevel__arch_subarch for arch $ARCH"
+			fi
+
+			# TODO Jul2025 - I think multilib will be phased out. In general toplevel__arch_crossompile is not really used anywhere anyway
+			toplevel__arch_crosscompile=i386 # not relevant, in such cases it will most likely go with multilib and the -m32 flag
+			;;
+		x86_64|x64|amd64|x32)
+			# if you want x32 you know what you want and you will know how to configure the kernel for it
+			if [ -z "$ARCH" ] ; then
+				ARCH=x86_64
+			elif [ ! "$ARCH" = "x86_64" ] ; then
+				fatalError "Invalid subarch $config_toplevel__arch_subarch for arch $ARCH"
+			fi
+			toplevel__arch_crosscompile=x86_64
+			;;
+		aarch64|arm64|armv8|armv9)
+			if [ -z "$ARCH" ] ; then
+				ARCH=arm64
+			elif [ ! "$ARCH" = "arm" ] ; then
+				fatalError "Invalid subarch $config_toplevel__arch_subarch for arch $ARCH"
+			fi
+			toplevel__arch_crosscompile=aarch64
+			;;
+		armv7|armhf|armv6|armv5|arm|armel|armeb)
+			if [ -z "$ARCH" ] ; then
+				ARCH=arm
+			elif [ ! "$ARCH" = "arm" ] ; then
+				fatalError "Invalid subarch $config_toplevel__arch_subarch for arch $ARCH"
+			fi
+			toplevel__arch_crosscompile=arm	# but it's not accurate, as the ABI is defined by another part of the tupple
+			;;
+		riscv64|riscv)
+			if [ -z "$ARCH" ] ; then
+				ARCH=riscv
+			elif [ ! "$ARCH" = "riscv" ] ; then
+				fatalError "Invalid subarch $config_toplevel__arch_subarch for arch $ARCH"
+			fi
+			toplevel__arch_crosscompile=riscv64
+			;;
+		*)
+			fatalError "Unsupported subarch $config_toplevel__arch_subarch"
+			;;
+	esac
+}
+
+
+
+#
+# This will be staged out
+toplevel__adjust_arch_variable_if_needed() {
+	local newarch=""
+	case $ARCH in
+		aarch64|arm64)
+			newarch=arm64
+			;;
+		riscv64|riscv)
+			newarch=riscv
+			;;
+		arm*)
+			newarch=arm
+			;;
+		x86_64)
+			newarch=x86_64 # could be x86 for the linux kernel, it's either way
+			;;
+		i?86)
+			newarch=i386
+			;;
+		loongarch64|loongarch|loong64)
+			newarch=loongarch64
+			;;
+		*)
+			fatalError Unsupported architecture $ARCH
+			;;
+	esac
+
+	if [ ! "$ARCH" = "$newarch" ] ; then
+		hardWarn "Auto adjusting ARCH ($ARCH --> $newarch)"
+		ARCH=$newarch
+	fi
+}
+
+#
+# This is a "best effort" to set the ARCH variable, if it was not set by the user and it is a native build.
+#
+toplevel__set_arch_variable_for_native_build_if_needed() {
+	case $(uname -m) in
+		aarch64)
+			ARCH=arm64
+			;;
+		arm64)
+			warn "You are likely running on an Apple Silicon Mac, and are building directly on Darwin (i.e. not in a docker or something like that)"
+			warn "While it might work, it is not supported and has not been tested"
+			ARCH=arm64
+			fatalError "This is not supposed to be supported right now, if it does work, let me know. Maybe I'll add support for it later"
+			;;
+		riscv64)
+			ARCH=riscv
+			;;
+		arm*)
+			ARCH=arm
+			;;
+		x86_64)
+			ARCH=x86_64 # could be x86 for the linux kernel, it's either way
+			;;
+		i?86)
+			warn "You are building on a 32-bit x86 host has not been tested"
+			ARCH=i386
+			;;
+		loongarch64)
+			ARCH=loongarch64
+			;;
+		*)
+			warn "You are building for (uname -m). It it might work, but it has not been tested"
+			ARCH=$(uname -m) # may fail but we don't really intend to support everything
+			;;
+	esac
+
+	export ARCH
+}
+
+
+# It is the responsibility of the caller to have the toolchain available in PATH. The current version supports both native and cross building, however, if other tools are involved
+# and do not respect the CROSS_COMPILE variable and need direct assignments, we do not support it now. We do try to "guess" the cross compiler automatically unless the user
+# set one specifically, and we assume the target architecture is only arm64. Some tools may want the arch to be named aarch64 - not the current ones as per the building time
+
+toplevel__set_crosscompile_variables_if_needed() {
+	# We could support non Linux hosts, but for the sake of simplicity I assume we are using a Linux host, with "easily installable" toolchains
+	case $ARCH in
+		"")
+			info "Assuming native build for $(arch) using native toolchains"
+			CROSS_COMPILE=""
+			;;
+		aarch64|arm64*)
+			if [ ! "$(uname -m)" = "aarch64" -a -z "$CROSS_COMPILE" ] ; then
+				CROSS_COMPILE=aarch64-linux-gnu-
+				${CROSS_COMPILE}gcc -v >& /dev/null || fatalError "Cannot use cross compiler $CROSS_COMPILE. Please verify it is installed and in your path"
+			fi
+			;;
+		arm)
+			# TODO: not sure if arm should default into armhf (for Ubuntu) or armel (which is the gnueabi).
+			# This is counterintuitive, and mostly meant to not complicate the targets
+			# armv7 is not specified explicitly because some distros expect it to be armv7+hf - so it's even more misleading.
+			# We will treat it as armhf - unless the user sets CROSS_COMPILE themselves, and sets the subarch themselves
+			if [ ! "$(uname -m)" = "arm" -a -z "$CROSS_COMPILE" ] ; then
+				case "$config_toplevel__arch_subarch" in
+					arm|armv6|armv5|armel)
+						CROSS_COMPILE=arm-linux-gnueabi-
+						${CROSS_COMPILE}gcc -v >& /dev/null || fatalError "Cannot use cross compiler $CROSS_COMPILE. Please verify it is installed and in your path"
+						;;
+					armv7|*)
+						CROSS_COMPILE=arm-linux-gnueabihf-
+						${CROSS_COMPILE}gcc -v >& /dev/null || fatalError "Cannot use cross compiler $CROSS_COMPILE. Please verify it is installed and in your path"
+						warn "Automatically setting CROSS_COMPILE to $CROSS_COMPILE. You should choose the right one for your target architecture, e.g. arm-linux-gnueabi- for armel, or arm-linux-gnueabihf- for armhf"
+						;;
+				esac
+			fi
+			;;
+		armhf)
+			if [ ! "$(uname -m)" = "arm" -a -z "$CROSS_COMPILE" ] ; then
+				CROSS_COMPILE=arm-linux-gnueabihf-
+				${CROSS_COMPILE}gcc -v >& /dev/null || fatalError "Cannot use cross compiler $CROSS_COMPILE. Please verify it is installed and in your path"
+			fi
+			# we will deal with the subarch later
+			fatalError "Please do not set ARCH=armhf, as it is not a valid architecture. Use ARCH=arm instead, and set CROSS_COMPILE to arm-linux-gnueabihf- if you want to build for armhf"
+			;;
+		x86_64)
+			if [ ! "$(uname -m)" = "x86_64" -a -z "$CROSS_COMPILE" ] ; then
+				CROSS_COMPILE=x86_64-linux-gnu-
+				${CROSS_COMPILE}gcc -v >& /dev/null || fatalError "Cannot use cross compiler $CROSS_COMPILE. Please verify it is installed and in your path"
+			fi
+			;;
+		i?86)
+			# in the past we would allow multilib builds (e.g. -m32) but as the Linux kernel itself phased out i386, and
+			# the toolchains provided by e.g. recent ubuntu are i686 related, we will automatically set toolchains to i686-linux-gnu
+			# Previous versions indeed aimed for busybox to build with CFLAGS=m32 and LDFLAGS=-m32 but we will cross compile everything
+			# and this is just left as an educational reminder, especially if you saw the code somewhere in the past.
+			if [ "$(uname -m)" = "x86_64" -a -z "$CROSS_COMPILE" ] ; then
+				CROSS_COMPILE=i686-linux-gnu-
+				${CROSS_COMPILE}gcc -v >& /dev/null || fatalError "Cannot use cross compiler $CROSS_COMPILE. Please verify it is installed and in your path"
+			elif [ "$(uname -m)" = "i?86" -a -z "$CROSS_COMPILE" ] ; then
+				fatalError "We will not support i386 hosts. Come on, do you really have one? I don't think Debian or Ubuntu even support them anymore!"
+			fi
+			if [ ! "$ARCH" = "i386" ] ; then
+				fatalError "Please set ARCH=i386 if you want to build for 32bit x86 machines, and either set CROSS_COMPILE, set the subarch variables, or both if you really want to be specific about the ARCH."
+			fi
+			;;
+		riscv|riscv64)
+				CROSS_COMPILE=riscv64-linux-gnu-
+				${CROSS_COMPILE}gcc -v >& /dev/null || fatalError "Cannot use cross compiler $CROSS_COMPILE. Please verify it is installed and in your path"
+			;;
+		riscv32)
+				fatalError "Sorry but there is no support for 32-bit risc-v products"
+			;;
+		loongarch)
+			CROSS_COMPILE=loongarch64-linux-gnu-
+			${CROSS_COMPILE}gcc -v >& /dev/null || fatalError "Cannot use cross compiler $CROSS_COMPILE. Please verify it is installed and in your path"
+			;;
+		s390)
+			CROSS_COMPILE=s390x-linux-gnu-
+			${CROSS_COMPILE}gcc -v >& /dev/null || fatalError "Cannot use cross compiler $CROSS_COMPILE. Please verify it is installed and in your path"
+			;;
+		powerpc)
+			CROSS_COMPILE=powerpc64le-linux-gnu-
+			${CROSS_COMPILE}gcc -v >& /dev/null || fatalError "Cannot use cross compiler $CROSS_COMPILE. Please verify it is installed and in your path"
+			;;
+		sparc)
+			# it could be supported. just specifying explicitly that in the Linux kernel sparc is 32-bits and sparc64 is 64-bits
+			fatalError "32-bit sparc is not supported"
+			;;
+		sparc64)
+			CROSS_COMPILE=sparc64-linux-gnu-
+			${CROSS_COMPILE}gcc -v >& /dev/null || fatalError "Cannot use cross compiler $CROSS_COMPILE. Please verify it is installed and in your path"
+			warn "sparc64 requires downloading specific sparc firmware files. If you port it, take this into consideration (and use the niagara machine)"
+			;;
+		x86)
+			fatalError "x86 can be confusing, as one would likely think it is 32bits, but if you run a 64bit x86_64 host, the kernel will build for 64bits. Please set ARCH=i386 if you want to build for 32bit x86 machines"
+			;;
+		*)
+			fatalError "Unsupported ARCH $ARCH"
+			;;
+	esac
+	info "Will build with ARCH=$ARCH CROSS_COMPILE=$CROSS_COMPILE"
+	export CROSS_COMPILE
+}

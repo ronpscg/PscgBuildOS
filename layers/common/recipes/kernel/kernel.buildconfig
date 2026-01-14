@@ -1,0 +1,194 @@
+
+# The following block of variables is used only for build time optimizations of a developer who knows what they are doing
+# They aim to save time and storage space, but it is not the recommended way to work, make some of the code uglier,
+# and are not as tested as the right way to do things
+# Note that for all of them, an expectation is to have at least one time a correct build, so that we do not modify
+# the prestine source (e.g. git) for future offline builds. Having noted that, it means that you could for example,
+# use the same checked-out source tree for 20 different builds and save ~40GB or so, and you can use the same kernel build
+# for the same architectures and also save quite a few bytes.
+# This means that any changes you do once you have set these things are better handled with a clean build
+# once you have done them, to assure that others have not been working on the same code without your intention
+#
+
+: ${config_kernel__do_modules=true}				# Set explicitly to false if you want to avoid building external modules and/or installing the kernel built modules, and packing all the modules into a tarball
+: ${config_kernel__do_config=true}				# Set explicitly to false if you want to avoid make config. It is assumed then that you know what you are doing
+: ${config_kernel__do_build=true}				# Set explicitly to false if you want to avoid make config. It is assumed then that you know what you are doing
+: ${config_kernel__recopy_dtb=true}				# Not relevant for all architectures, but common enough to be common
+
+export config_kernel__do_modules config_kernel__recopy_dtb
+
+set -a
+: ${config_kernel__commit=""}
+: ${config_kernel__kernel_config_src_path=""}				# Non empty if the default config comes from a filename
+: ${config_kernel__kernel_config_out_name="kernel.config"}	# Name to copy .config to. If you want to keep it the same, just call it .config
+
+: ${config_kernel__fetch_git_or_tarball="git"} # Obviously, this is an example fo selecting whether to work with git or a tarball, and both mechanisms are valid and good!
+
+: ${config_kernel__git_repo_uri="git://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git"} # TODO: if using offline repo - don't copy, just clone the commit immediately, and with a shallow clone
+
+
+# if using offline build / a build where the repos have been cloned prior to building (for reproducibility). Note that of course all of these would require change upon kernel version changes
+: ${config_kernel__offline_git_repo_uri=$config_toplevel__downloads_base_path/linux-kernel} # TODO: I don't think we use it
+
+: ${config_kernel__list_of_defconfigs="defconfig"}
+
+: ${config_kernel__list_of_config_fragments=""} # fragment files
+: ${config_kernel__list_of_config_overrides=""} # command line config
+
+: ${config_kernel__tricky_and_required_config_items=""} 			# Specified inside a sanity check function
+: ${config_kernel__autoadd_tricky_and_required_config_items=false}		# Setting to true will try to opportunisticly auto add a helper config that sets things you might not expect to deal with like some charset encodings
+: ${config_kernel__fail_on_missing_tricky_and_required_config_items=true}	# Setting to true will fail if config is not available
+export config_kernel__tricky_and_required_config_items config_kernel__autoadd_tricky_and_required_config_items config_kernel__fail_on_missing_tricky_and_required_config_items
+
+#
+# The following aim to save some time in merge configs, and some painful debugging when trying to script some configs
+# The idea is that only merge_config and make menuconfig et. al handle dependencies, but one is interactive
+# and the other is slow. So we provide following strategies to choose from
+# It is assumed that if you produce something, you save your configuration, and then use it as the path to config file in config_kernel__kernel_config_src_path
+#
+
+# merge_config does a good job, but makes things slower. this is the only option we will choose though, as it is the right and standard one
+# if you find yourself needing it something else, you will know to use it
+# note that for files in the kernel arch/<...>/configs/ you should use the config_kernel__list_of_defconfigs variable
+: ${config_kernel__config_fragments_build_strategy="merge_config"}	# none|merge_config
+
+# You can provide CONFIG_<...>=<value> in the build phase (not in the config). However, it is not reliable, and may
+# result in linking errors. A solution (other than make menuconfig) can be one of the following:
+# - fragment: create a temporary fragment - and then use it in the config phase. Handles dependencies, and makes config phase slower
+# - config: uses script/config --set-val (can use -e / -d if it's y/n) in the config phase
+# - sed: directly modify the kernel config file (not supported, as it doens't do anything config doesn't do, so there is no point to bother implemening it)
+# - make: set in environment variables - usually works well for small things or modules, but shuld not be relied on.
+#			e.g. make CONFIG_OVERLAY_FS=y <...> would result in x86_64 in:
+#   		LD      .tmp_vmlinux.kallsyms1
+#			ld: vmlinux.o: in function `ovl_open_realfile':
+#			file.c:(.text+0x46aef8): undefined reference to `backing_file_open'
+#
+# In the options mentioned above, the safest is fragment, but if using merge_config, which is recommended, it slows down the build
+# So the default is selected to config, and assumes you really know what you are doing (which is the only purpose of giving the cmdline options in the first place!)
+#
+: ${config_kernel__configs_overrides_build_strategy=config} # make|config|fragment|sed
+
+export config_kernel__config_fragments_build_strategy config_kernel__configs_overrides_build_strategy
+
+# TODO: Put source directories in a common place. For all open source projects
+: ${KERNEL_BUILD_WORKING_DIRECTORY=$BUILD_DIR/kernel}
+: ${LINUX_SOURCE_PARENT_DIR=$KERNEL_BUILD_WORKING_DIRECTORY}        # used for tarball unpacking
+: ${LINUX_SOURCE_DIR=$LINUX_SOURCE_PARENT_DIR/linux-kernel-src}
+: ${LINUX_BUILD_DIR=$KERNEL_BUILD_WORKING_DIRECTORY/linux-kernel-build}
+: ${LINUX_INSTALL_DIR=$KERNEL_BUILD_WORKING_DIRECTORY/linux-kernel-install}
+
+: ${config_kernel__edu_do_modules_prepare=false}	# This is for demonstrating the effect of modules_prepare WITHOUT building a kernel. We use it as a side effect of the build, for educational purposes only
+export config_kernel__edu_do_modules_prepare
+
+export kernel__modules_install_workdir=$LINUX_INSTALL_DIR/linux-modules
+export kernel__headers_install_workdir=$LINUX_INSTALL_DIR/linux-headers
+export kernel__modules_prepare_workdir=$LINUX_INSTALL_DIR/linux-modprepare # this is for demonstration only
+
+
+# Might copy them with a name that specifies the version - for that the kernel version (and ideally magic) would need to be copied. Perhaps on future versions
+# TODO: tarball creation should not concern the kernel builder itself. It's a distro thing.
+export kernel__modules_install_tarball=$LINUX_INSTALL_DIR/linux-modules.tar.gz
+export kernel__headers_install_tarball=$LINUX_INSTALL_DIR/linux-headers.tar.gz
+export kernel__modules_prepare_tarball=$LINUX_INSTALL_DIR/linux-modules_prepare.tar.gz # Thiis mostly made for demostrations
+
+
+# Allow specifying specific modules to be added to the initrafms and/or rootfs
+# files_list_nosuffix: without suffix - to allow copying either .ko or .ko.zstd
+# files_list: adjusted to have suffixes
+: ${config_kernel__specific_modules_initramfs_files_list_nosuffix=""}
+: ${config_kernel__specific_modules_rootfs_files_list_nosuffix=""}
+: ${kernel__specific_modules_initramfs_files_list=""} # Copied to initramfs (in do_build_ramdisk)
+: ${kernel__specific_modules_rootfs_files_list=""}	  # Copied to the richos (to the rootfs)
+: ${config_kernel__copy_all_built_modules_to_initramfs="false"} # Copied to initramfs (in do_build_ramdisk)
+: ${config_kernel__copy_all_built_modules_to_rootfs="false"} # Copied to initramfs (in do_build_ramdisk)
+
+export config_kernel__specific_modules_initramfs_files_list_nosuffix config_kernel__specific_modules_rootfs_files_list_nosuffix
+export kernel__specific_modules_initramfs_files_list kernel__specific_modules_rootfs_files_list
+export config_kernel__copy_all_built_modules_to_initramfs config_kernel__copy_all_built_modules_to_rootfs
+
+#
+# Populate kernel modules under $1/lib/modules/<kernelversion> and make them modprobe-able
+# $1 firmware files list. if $1 euals "all", all modules are copied
+# $2 dst directory - target rootfs or initramfs folder.
+#
+copy_linux_modules_to_folder_and_rerun_depmod() {
+	local list=$1
+	local dst=$2
+	local SUDO=${3-""}
+	local libmoduleskv=lib/modules/$(cat $LINUX_BUILD_DIR/include/generated/utsrelease.h | cut -d' ' -f 3 |  tr -d '"')
+
+	dod [ -d "$dst" ]
+	[ -d "$dst/$libmoduleskv" ] || dod $SUDO mkdir -p $dst/$libmoduleskv
+
+	if [ "$list" = "all" ] ; then
+		verbose_do_or_die $SUDO cp -av $kernel__modules_install_workdir/$libmoduleskv/* $dst/$libmoduleskv/
+	else
+		local suffix=.ko
+		if grep -q "CONFIG_MODULE_COMPRESS=y" $LINUX_BUILD_DIR/.config ;then
+			grep -q "CONFIG_MODULE_COMPRESS_ZSTD=y" $LINUX_BUILD_DIR/.config && suffix=.ko.zst
+			grep -q "CONFIG_MODULE_COMPRESS_GZIP=y" $LINUX_BUILD_DIR/.config && suffix=.ko.gz
+			grep -q "CONFIG_MODULE_COMPRESS_XZ=y" $LINUX_BUILD_DIR/.config && suffix=.ko.xz
+		fi
+		for f in $list ; do
+			verbose_do_or_die copy_one_file_from_src_to_dst_creating_directories ${f}${suffix} $kernel__modules_install_workdir/$libmoduleskv $dst/$libmoduleskv $SUDO
+		done
+	fi
+
+	kernel__do_cross_depmod $dst
+}
+export -f copy_linux_modules_to_folder_and_rerun_depmod
+
+#
+# Allow common sanity checks, for config options that must be present
+#
+# $1 config flie
+#
+kernel__common_check_config_sanity() {
+	local rc=0
+	local configfile=$1
+	config_kernel__tricky_and_required_config_items+=" CONFIG_NLS_ISO8859_1=y"	# not enabled by default in risc-v. required to have long file names on fat partitions
+	config_kernel__tricky_and_required_config_items+=" CONFIG_OVERLAY_FS=y"		# not enabled by default in several architectures. required to
+	for config in $config_kernel__tricky_and_required_config_items ; do
+		if ! grep -q $config $configfile ; then
+			rc=1
+			if [ "$config_kernel__autoadd_tricky_and_required_config_items" = "true" ] ; then
+				warn "$config is not present in $configfile. Trying to add it in an opportunistic way"
+				config_kernel__list_of_config_overrides+=" $config"
+			else
+				error "$config is not present in $configfile"
+			fi
+		fi
+	done
+
+	return $rc
+}
+
+#
+# Initialize the kernel fetch/unpack variables.
+#
+kernel__common_init_fetch_unpack_variables() {
+	if [ "$config_kernel__fetch_git_or_tarball" = "tarball" ] ; then
+		# tarball example
+		linuxdashkv=linux-6.10
+		fetch_remote_uri=https://cdn.kernel.org/pub/linux/kernel/v6.x/$linuxdashkv.tar.xz
+		fetch_local_target_path=$config_toplevel__downloads_base_path/$linuxdashkv.tar.xz
+		fetch_expected_sha256="774698422ee54c5f1e704456f37c65c06b51b4e9a8b0866f34580d86fef8e226"
+		unpack_dest_path=$KERNEL_SOURCE_PARENT_DIR
+		unpack_link_src=$KERNEL_SOURCE_PARENT_DIR//$linuxdashkv
+		unpack_link_dst=$LINUX_SOURCE_DIR
+		post_unpack_command="[ -L $unpack_link_dst ] && rm $unpack_link_dst ; ln -s $unpack_link_src $unpack_link_dst  ;"
+	else
+		# git example
+		fetch_remote_uri=$config_kernel__git_repo_uri
+		: ${fetch_flags=""} # allow for extra flags, e.g. shallow clone etc.
+		fetch_local_target_path=$config_toplevel__downloads_base_path/linux-kernel.git
+		fetch_expected_sha256=""		# we don't care in git, we only care about the commit *if* it is specified
+		fetch_commit=$config_kernel__commit
+		unpack_dest_path=$LINUX_SOURCE_DIR
+		post_unpack_command='verbose "done unpacking $unpack_dest_path \nKernel version:\n$(head -n 6  $unpack_dest_path/Makefile | tail -5)";'
+	fi
+}
+
+export -f kernel__common_init_fetch_unpack_variables
+
+set +a

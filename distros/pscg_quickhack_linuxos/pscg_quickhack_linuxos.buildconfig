@@ -1,0 +1,5 @@
+# TODO: take into consideration subarchs etc. but for now we are refining the system and focusing on the ARCH only
+export distro__identifier_name=${config_distro}-${ARCH} # havnen't used it in a while so make it noticable (although it already is) and have a placeholder in case we want to have several quickhacks on the rootfs
+source_file_or_die $DISTROS_DIR/common-linux/pscg_linux.buildconfig
+# I don't want to use symlink or hardlink because I want to demonstrate reusing and then changing etc/ stuff
+config_distro__prebuilt_image_materials_reusing_method=copy

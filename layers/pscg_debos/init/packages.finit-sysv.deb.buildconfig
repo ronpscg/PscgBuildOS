@@ -1,0 +1,12 @@
+# actually everything under the init/ could be in the same file, as we mostly use the buildconfig
+# to create the caches.
+# However, we want to also allow a mode of installing without caches (e.g. as a mean to
+# show how things work without caching)
+
+#
+LOCAL_INSTALL_PACKAGES="finit-sysv"		# Packages to install
+pscg_debos__add_to_conflicting_package_list $LOCAL_INSTALL_PACKAGES
+pscg_debos__add_to_package_list $LOCAL_INSTALL_PACKAGES
+
+# This is a time saving hack. It is meant to install this package separately, without checking on a config.
+# The reason for that is that it is useful for the cache to be as big as it can

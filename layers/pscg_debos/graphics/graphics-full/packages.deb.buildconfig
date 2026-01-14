@@ -1,0 +1,45 @@
+#
+# An example for Desktop Environments and Display Managers.
+# Do note that you may need to add more repos to your apt sources (especially in ubuntu, e.g at least universe, Debian is more generous)
+#
+# Everything here is likely to add *a lot* of disk space, but if you are configuring this, you are probably already aware of it
+#
+# Note that we add here to the package list explicitly. This is for caching reasons. The recipe itself can decide according to a config which sets to install
+#
+# Note about weston without a DM or another DE:
+#	If you only install this, you are encouraged to run it by something like :
+#	mkdir foo ;  export XDG_RUNTIME_DIR=$PWD/foo ; weston --tty 3 &
+#   You can run on other ttys, and in parallel
+#
+
+
+
+
+
+# TODO: These configs should go elsewhere, as they affect quite a few things (e.g. packages, boot params, QEMU params etc.)
+# I use DRI because it's the right name, despite the configs, and because, maybe someone will want to add rights-management DRM related code so this prevents future confusions
+# Assume standard Linux paths (e.g. in Android you could have things under /dev/graphics/... )
+: ${config_bsp__graphics_has_dri=true}
+: ${config_bsp__graphics_has_fbdev=true} 					# accounts for both non-accelerated fbdev and DRM_FBDEV_EMULATION
+: ${config_bsp__graphics_dri_card_nodes="card0"} 			# could provide a list of cards
+: ${config_bsp__graphics_dri_render_nodes="renderD128"} 	# could provide a list of nodes
+: ${config_bsp__graphics_fbdev_nodes="fb0"}					# could provide a list of frame buffers
+# endofTODO
+
+
+
+: ${pscg_debos_graphics_dri_packages="weston"}
+: ${pscg_debos_graphics_fbdev_packages="kde-plasma-desktop"}
+: ${pscg_debos_graphics_fbdev_packages="lightdm xfce4 kde-plasma-desktop gnome"}
+
+# You can set a list of terminal emulators. If it is important for you, you can have a step that sets the default (same for all of the components really)
+: ${pscg_debos_graphics_terminal_emulators_packages="terminator"}
+# kbd is a prerequisite for chvt, which is useful if you run qemu and don't have handy access to the qemu monitor/sendkey interface
+: ${pscg_debos_graphics_common_packages="kbd"}
+
+# If this is not empty, /etc/systemd/system/display-manager.service  will be symlinked to the respective display manager unit file
+#: ${pscg_debos_graphics_default_dm="gdm3"}
+
+# Specified explicitly instead of line terminating ('\') for easier search
+pscg_debos__add_to_package_list $pscg_debos_graphics_dri_packages $pscg_debos_graphics_fbdev_packages
+pscg_debos__add_to_package_list $pscg_debos_graphics_common_packages $pscg_debos_graphics_terminal_emulators_packages

@@ -1,0 +1,5 @@
+# 
+# We like using the xz archiver. However, it does not come with an Ubuntu minbase so install it separately
+#
+: ${pscg_debos_ubuntu_archive_utils_packages=xz-utils}
+pscg_debos__add_to_package_list $pscg_debos_ubuntu_archive_utils_packages

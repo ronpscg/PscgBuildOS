@@ -1,0 +1,3 @@
+# TODO: take into consideration subarchs etc. but for now we are refining the system and focusing on the ARCH only
+export distro__identifier_name=${config_distro}-${ARCH} # busyboxos for now has a single indentifier (unlike multiple debian or ubuntu versions)
+source_file_or_die $DISTROS_DIR/common-linux/pscg_linux.buildconfig

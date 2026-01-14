@@ -1,0 +1,6 @@
+#
+# You may or may not want to use kernel modules. If so, you may or may not use kmod or busybox
+# However, if you use busybox, and don't build it yourself, it is very possible that you will not have modprobe in it, so take heed
+#
+: ${pscg_debos_kmod_packages="kmod"}
+pscg_debos__add_to_package_list $pscg_debos_kmod_packages

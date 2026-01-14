@@ -1,0 +1,55 @@
+: ${config_buildtasks__do_pack_images=true}
+
+: ${config_buildtasks__do_build_rootfs=true}
+: ${config_buildtasks__do_build_ramdisk=true}
+: ${config_buildtasks__do_build_kernel=true}
+: ${config_buildtasks__do_build_kernel_modules=true} # This is only added to allow building existing oot modules against a kernel without building the kernel itself
+
+# The next two are now ignored as they are strictly BSP related
+# We can perhaps instead do out-of-tree modules, and out-of-tree userspace
+# TODO: think about the drivers later
+: ${config_buildtasks__do_build_drivers=false}	# May do for out of tree drivers (that are not part of the Linux kernel)
+# Firmware is being copied anyhow and not built, so this is also ignored.
+# Firmware can be copied in one of three cases:
+# 1. Part of the kernel builting
+# 2. Copied to initramfs (in do_build_ramdisk)
+# 3. Copied to the richos (to the rootfs)
+# All of the above are selected by environment variables defined in linux-firmware.buildconfig
+: ${config_buildtasks__do_build_firmware=false}	# Out of tree firmware (that is not part of the Linux kernel), and external devices (i.e. firmware)
+
+: ${config_buildtasks__do_build_bootloader=false}
+: ${config_buildtasks__do_build_tee=false}
+: ${config_buildtasks__do_build_bios=false}		# Could do (e.g. for QEMU bios)
+: ${config_buildtasks__do_build_hardware=false}	# Won't do... but one could build FPGA firmware here etc, or if you feel like providing HDL/RTL etc and package them for synthesis, enjoy...
+
+
+# All of them are now done so this is general
+: ${config_buildtasks__do_fetch=true}
+: ${config_buildtasks__do_unpack=true}
+: ${config_buildtasks__do_build=true}
+: ${config_buildtasks__do_package=true}
+export config_buildtasks__do_pack_images config_buildtasks__do_build_rootfs config_buildtasks__do_build_ramdisk config_buildtasks__do_build_kernel config_buildtasks__do_build_kernel_modules config_buildtasks__do_build_drivers config_buildtasks__do_build_bootloader config_buildtasks__do_build_tee config_buildtasks__do_build_firmware config_buildtasks__do_build_bios config_buildtasks__do_build_hardware
+
+
+# Extra for developers
+: ${config_buildtasks__do_generate_qemu_scripts=true}	# Generate qemu scripts - recommended only if the bsp is indeed of type qemu so this might move somewhere else. I sometimes like generating scripts to allow booting
+export config_buildtasks__do_generate_qemu_scripts
+
+# DebOS specific (for now). Can do this for other distros as well
+: ${config_buildtasks__do_build_rootfs_caches_and_quit=false}
+export config_buildtasks__do_build_rootfs_caches_and_quit
+
+# This is a basic check that is fine leaving no matter for what distro. Would be better suited in some sanity check for each distro separately
+if [ "$config_buildtasks__do_build_rootfs_caches_and_quit" = "true" ] ; then
+    case "$config_distro" in
+        pscg_debos)
+            ;;
+        pscg_busyboxos)
+            warn "$config_distro does not require any rootfs caching"
+            exit 0 # If you port this code to something that is not sourced from the top level - maybe you want to return an error instead
+            ;;
+        *)
+            fatalError "You set config_buildtasks__do_build_rootfs_caches_and_quit=true for $config_distro. However, that distro does not implement caching yet."
+            ;;
+    esac
+fi

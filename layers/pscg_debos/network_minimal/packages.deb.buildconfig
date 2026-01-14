@@ -1,0 +1,10 @@
+#
+# Note: In a minimal system it is very likely you would either put curl, wget, both, or neither.
+# If you do package managment, you may want to also get ca-certificates
+#
+: ${pscg_debos_ubuntu_core_network_packages="iproute2 isc-dhcp-client"}
+: ${pscg_debos_ubuntu_more_network_packages="iputils-ping netcat-openbsd ssh"}
+: ${pscg_debos_ubuntu_extra_network_packages="wget curl"}
+: ${pscg_debos_ubuntu_network_packages="$pscg_debos_ubuntu_core_network_packages $pscg_debos_ubuntu_more_network_packages $pscg_debos_ubuntu_extra_network_packages"}
+
+pscg_debos__add_to_package_list $pscg_debos_ubuntu_network_packages

@@ -1,0 +1,61 @@
+set_homedir() {
+        if [ -n "$SUDO_HOME" ] ; then
+                : ${homedir=$SUDO_HOME}
+        elif [ -n "$SUDO_USER" ] ; then
+                : ${homedir=/home/$SUDO_USER}
+        else
+                : ${homedir=$HOME}
+        fi
+}
+set_homedir
+
+: ${BUILD_TOP=$(realpath $(dirname ${BASH_SOURCE[0]})/..)} # if this moves from config/  modify this line accordingly
+: ${BUILD_OUT=${homedir}/PscgBuildOS/out} # This is where the out/ directory will be. Could be convenient to store it outside of the build source directory, for easier find/grep
+: ${config_distro=CHANGEME}			# Do not modify. We demand the user to choose the built distro as an environment variable
+
+# The reason TMP_TOP exists, is in case an outside builder want to have the files persistent, or
+# want to have tempoarary images (some of the build steps) that could be so big (graphics, etc.) that they
+# could potentially exhaust tmpfs. The preference is to do whatever possible in tmpfs (e.g. /tmp), because
+# it is faster, wears less the disk, etc., and this is why it is set as the default.
+# You can see examples of modifying this according to different trade-offs at https://github.com/ronpscg/PscgBuildOS-helpers/ (at the time of writing these lines)
+: ${TMP_TOP=/tmp/PscgBuildOS}
+
+# This is specified here althought its only consumers are in toplevel.buildconfig because it
+# emphasizes that this is an "important" base dir. It is important because several different projects may want
+# to reuse it, and so it is likely you would want to modify it to be outside of the BUILD_OUT dir, e.g:
+: ${HOST_CACHES_BASE_DIR=${BUILD_OUT}/host}
+: ${HOST_CACHES_BASE_DIR=${homedir}/pscgbuildos-build-caches-host/host}
+
+logFile=${logFile-${TMP_TOP}/$(basename -s .sh $0).log}
+
+: ${config_toplevel__shared_artifacts=${BUILD_OUT}/artifacts}
+
+: ${config_toplevel__product_build_dir_prefix=$BUILD_OUT/target/product/${config_distro}/build}		#This is (one of the only) variables that is a config of top level, but not modifiable by the respective file.
+: ${config_toplevel__shared_build_src_dir_prefix=$BUILD_OUT/target/shared/src}				#This is (one of the only) variables that is a config of top level, but not modifiable by the respective file.
+: ${config_toplevel__shared_build_arch_dir_prefix=$BUILD_OUT/target/shared/arch}			#This is (one of the only) variables that is a config of top level, but not modifiable by the respective file.
+
+export BUILD_OUT distro TMP_TOP logFile
+export HOST_CACHES_BASE_DIR
+export config_toplevel__shared_artifacts
+export config_toplevel__product_build_dir_prefix
+
+
+create_containing_folders_if_needed() {
+	for path in logFile ; do
+		test -z "$path" && continue
+		d=$(dirname $(get_compound_var $path))
+		if [ ! -d $(dirname $d) ] ; then
+			warn "Creating $d for the first time"
+			mkdir -p $d || fatalError "Failed to create $d"
+		fi
+	done
+}
+
+# Since this file is sourced before commonEnv.sh, it is a good time to create the folder of the only path dependent file there, $logFile
+if [ -z "$logFile" ] ; then
+        echo "Your logFile is empty and you should not run the build system like this"
+        exit 1
+fi
+if  [ ! -d $(dirname "$logFile") ] ; then
+        mkdir -p $(dirname $logFile) || { echo "Failed to create the directory for $logFile" ; exit 1 ; }
+fi

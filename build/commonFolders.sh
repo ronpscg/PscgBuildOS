@@ -1,0 +1,4 @@
+: ${LAYERS_DIR="$BUILD_TOP/layers"}
+: ${DISTROS_DIR="$BUILD_TOP/distros"}
+
+export LAYERS_DIR DISTROS_DIR

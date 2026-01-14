@@ -1,0 +1,5 @@
+export distro__identifier_name=${config_distro}-${ARCH} # TODO: take into consideration subarchs etc. but for now we are refining the system and focusing on the ARCH only
+source_file_or_die $DISTROS_DIR/common-linux/pscg_linux.buildconfig
+# I don't want to use symlink or hardlink because I want to demonstrate reusing and then changing etc/ stuff
+# This time we won't change the ramdisk etc. so why not.
+config_distro__prebuilt_image_materials_reusing_method=symlink

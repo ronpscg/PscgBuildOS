@@ -1,0 +1,11 @@
+pscg_debos - rootfs for the pscg_debos
+common - common code, e.g. for building kernel, U-Boot etc. [Note: kernel: meta/recipes-kernel   specifics meta-yocto-bsp/recipes-kernel . U-Boot/Grub etc. -   meta/recipes-bsp] 
+	So common will be refactored. For now I Start with this.
+
+If you are experienced with the yocto projects, you will see that (== means 'sort of')
+meta-* == layers/*
+recipes-* == recipes/*
+meta == layers/common
+
+
+layers/pscg_debos - defines the root file system recipes for pscg_debos which is a Debian/Ubuntu based root filesystem, using APT/dpkg to manage packages

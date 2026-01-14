@@ -1,0 +1,7 @@
+# actually everything under the init/ could be in the same file, as we mostly use the buildconfig 
+# to create the caches.
+# However, we want to also allow a mode of installing without caches (e.g. as a mean to
+# show how things work without caching)
+
+LOCAL_INSTALL_PACKAGES="systemd"		# Packages to install
+pscg_debos__add_to_package_list $LOCAL_INSTALL_PACKAGES

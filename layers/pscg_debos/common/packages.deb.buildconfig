@@ -1,0 +1,15 @@
+#
+# Add some slim editors and other low space useful utilities
+#
+
+# vim tiny is installed (by apt/dpkg) as alternative. i.e.: etc/alternatives/vi -> /usr/bin/vim.tiny
+# vim-tiny sucks though, so I am installing vim instead
+: ${pscg_debos__misc_common_editors_packages="vim"}
+
+# bsdextrautils provides hexdump
+# e2fsprogs is not installed by default on every Debian version (e.g. on sid on some archs), and it is important for OTA
+: ${pscg_debos__misc_common_utils_packages="e2fsprogs file bsdextrautils"}
+
+: ${pscg_debos__misc_common_packages="$pscg_debos__misc_common_editors_packages $pscg_debos__misc_common_utils_packages"}
+
+pscg_debos__add_to_package_list $pscg_debos__misc_common_packages

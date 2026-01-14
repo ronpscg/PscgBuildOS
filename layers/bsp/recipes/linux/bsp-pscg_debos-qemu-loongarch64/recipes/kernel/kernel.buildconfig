@@ -1,0 +1,75 @@
+config_kernel__list_of_defconfigs="defconfig"
+
+#
+# in riscv: mounting fat with the default config will get short path names so the fat installer will not work well
+# "IO charset iso8859-1 not found"
+# The reason for this is CONFIG_NLS_ISO8859_1=m
+# solutions:
+# - install the module of nls_iso8859-1
+# - CONFIG_NLS_ISO8859_1=y
+#
+#
+: ${config_kernel__list_of_config_overrides="CONFIG_NLS_ISO8859_1=y"}
+: ${config_kernel__list_of_config_fragments=""}
+: ${config_kernel__kernel_image_type=Image}
+
+export config_kernel__list_of_defconfigs config_kernel__list_of_config_overrides config_kernel__list_of_config_fragments config_kernel__kernel_image_type
+
+#
+# Implement this variable if you would like to override the behavior of the common kernel buildconfig
+#
+kernel__specific_init_fetch_unpack_variables() {
+	:
+}
+export -f kernel__specific_init_fetch_unpack_variables
+
+
+
+# WIP: everything above came directly from the riscv64 QEMU bsp. Below is for loong64
+# The default config used automatically is loongson3_defconfig
+unset config_kernel__kernel_image_type
+: ${config_kernel__kernel_image_type=vmlinuz.efi}	# vmlinux.bin/vmlinux.efi requiers loading with UEFI BIOS
+: ${config_bsp__qemu_prebuilt_bios="/usr/share/qemu-efi-loongarch64/QEMU_EFI.fd"}
+export config_bsp__qemu_prebuilt_bios
+
+# Check for the existence of the BIOS. Since at this time -bios is only required for loongarch64, we will
+# just force the specific path. Since in (most of the) PSCG Embedded Linux courses we build QEMU, and use
+# our own built versions, you may encounter different paths, copying, etc, that may find their way to this build system as well.
+# This way we avoid some changes
+if [ ! -e ${config_bsp__qemu_prebuilt_bios} ] ; then
+	fatalError "The prebuilt BIOS file ${config_bsp__qemu_prebuilt_bios} does not exist. Please install the qemu-efi-loongarch64 package."
+fi
+
+config_kernel__list_of_config_overrides+=" CONFIG_VFAT_FS=y CONFIG_FAT=y" # for whatever reason, they are defined as modules in the loongarch default config
+
+# This is a specific case that in busybox, unless kmod is seperately installed, will prevent networking - because on recent kernels, 
+# the modules are copmpressed with zstd, which busybox's modprobe does not support.
+config_kernel__list_of_config_overrides+=" CONFIG_VIRTIO_NET=y"
+
+#
+# More information about the loongarch64 kernel image types:
+#
+# One can boot vmlinux directly from QEMU. The chain for the other images can be learny from the .<image>.cmd file
+# e.g.:	vmlinux --> vmlinux.efi --> vmlinux.bin --> vmlinuz --> vmlinuz.o --> vmlinuz.efi.elf --> vmlinuz.efi
+#
+# The ELF is
+# ~/pscgbuildos-builds/target/shared/arch/loongarch/linux-kernel-build/arch/loongarch/boot$ file vmlinu*
+# vmlinux.bin:     PE32+ executable (EFI application) LoongArch 64-bit (stripped to external PDB), for MS Windows, 2 sections
+# vmlinux.efi:     PE32+ executable (EFI application) LoongArch 64-bit (stripped to external PDB), for MS Windows, 2 sections
+# vmlinuz:         Zstandard compressed data (v0.8+), Dictionary ID: None
+# vmlinuz.efi:     PE32+ executable (EFI application) LoongArch 64-bit (stripped to external PDB), for MS Windows, 2 sections
+# vmlinuz.efi.elf: ELF 64-bit LSB executable, LoongArch, version 1 (SYSV), statically linked, not stripped
+# vmlinuz.o:       ELF 64-bit LSB relocatable, LoongArch, version 1 (SYSV), not stripped
+# ~/pscgbuildos-builds/target/shared/arch/loongarch/linux-kernel-build/arch/loongarch/boot$ du -sh vmlinu*
+# 38M	vmlinux.bin
+# 38M	vmlinux.efi
+# 16M	vmlinuz
+# 16M	vmlinuz.efi
+# 16M	vmlinuz.efi.elf
+# 16M	vmlinuz.o
+#
+# Obviously the source is the kernel build top vmlinux file, which is a non-compressed ELF file:
+# $ file ../../../vmlinux
+# ../../../vmlinux: ELF 64-bit LSB executable, LoongArch, version 1 (SYSV), statically linked, BuildID[sha1]=99abb0de72cafa7fa540f8065d1a3d63acaa9fe2, not stripped
+# $ du -sh  ../../../vmlinux
+# 44M	../../../vmlinux

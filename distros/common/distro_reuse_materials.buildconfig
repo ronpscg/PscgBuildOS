@@ -1,0 +1,89 @@
+# The objectives of these definition files are to:
+# 1. Avoid clutter in other files
+# 2. Provide several configuration mechanisms for reusing build materials made by other distros, without complicating caches mechanisms,
+#    While developing.
+#
+# Practical note: in practice, every CI/CD mechanism in (almost) every company will redo everything from scratch,
+# so there is less sense in the effort made to keep the different caches. At least not for now.
+#
+#
+
+
+#
+# This function takes care of deciding what materials go where, and how. This is meant only for hacking stuff and showing reuse/common distros etc.
+# So don't treat it as something sacred. It is not
+#
+# The idea is to reuse materials (before packing an image) only if the distro does not build them due to specific buildtasks configuration
+# Otherwise, if a distro wants to reuse some things (e.g. for explaining some concepts, for real work build everything and reuse nothing!),
+# it will do some overriding on its own.
+#
+# In the case of absolute reuse, we will just have links
+#
+# Everything here is meant to be super hacky, so don't expect industrial level testing here! In fact, you should never use it
+#
+init_env_reuse_materials() {
+	if [ ! -d "$config_distro__prebuilt_image_materials_workdir" ] ; then
+		return # Nothing to do
+	fi
+
+	if [ -z "$config_distro__prebuilt_image_materials_reusing_method" ] ; then
+		fatalError "If you wish to reuse, you must provide config_distro__prebuilt_image_materials_reusing_method=<copy|symlink|hardlink>"
+	fi
+
+
+	export distro__prebuilt_image_materials_installables_workdir=$config_distro__prebuilt_image_materials_workdir/installables
+	export distro__prebuilt_image_materials_removable_media_specifics_dir=$config_distro__prebuilt_image_materials_workdir/removablemedia_specifics
+
+	export distro__prebuilt_image_materials_installables_folders_dir=$distro__prebuilt_image_materials_installables_workdir/installables/folders
+	export distro__prebuilt_image_materials_installables_overlays_dir=$distro__prebuilt_image_materials_installables_workdir/installables/overlays
+	export distro__prebuilt_image_materials_installables_writableoverlays_dir=$distro__prebuilt_image_materials_installables_workdir/installables/writableoverlays
+
+	export distro__prebuilt_image_materials_installables_bootfs_dir=$distro__prebuilt_image_materials_installables_workdir/bootfat
+	export distro__prebuilt_image_materials_installables_system_dir=$distro__prebuilt_image_materials_installables_workdir/ext4images/${distro__identifier_name}/system
+
+	export config_distro__prebuilt_image_materials_reusing_method # don't set a default value for it
+
+	# This is used only for the imager, to allow for calculateing the required storage size
+	# You do not have to provide it, as there are other mechanisms to calculate the required size
+	# Do note that whatever you provide in this file, is not consulted at runtime, as there is the respective definition in the ramdisk (or wherever the flasher is implemented)
+	: ${distro__prebuilt_partitions_emmc_config_file_for_imager_estimation=$config_distro__prebuilt_image_materials_workdir/partitions-emmc.config}
+	export distro__prebuilt_partitions_emmc_config_file_for_imager_estimation
+}
+
+reuse_build_materials() {
+	if [ ! -d "$config_distro__prebuilt_image_materials_workdir" ] ; then
+		return # Nothing to do
+	fi
+
+	if [ ! "$config_buildtasks__do_build_rootfs" = "true" ] ; then
+		debug_do_or_die remove_target_and_link_if_src_exists $distro__prebuilt_image_materials_installables_system_dir $distro__image_materials_installables_system_dir $config_distro__prebuilt_image_materials_reusing_method sudo
+	fi
+
+	# For the boot materials, we will require an "all or nothing". Currently only for ramdisk, kernel and bootloader,
+	# but one could test for the rest as well
+	if [ ! "$config_buildtasks__do_build_ramdisk" = "true" -a ! "$config_buildtasks__do_build_kernel" = "true" -a ! "$config_buildtasks__do_build_bootloader" = "true" ] ; then
+		# The installable bootfs dir
+		debug_do_or_die remove_target_and_link_if_src_exists $distro__prebuilt_image_materials_installables_bootfs_dir $distro__image_materials_installables_bootfs_dir $config_distro__prebuilt_image_materials_reusing_method
+		# The removable media specifics - this is an optional folder, which may be empty, so don't force it
+		debug_do_or_die remove_target_and_link_if_src_exists $distro__prebuilt_image_materials_removable_media_specifics_dir $distro__image_materials_removable_media_specifics_dir $config_distro__prebuilt_image_materials_reusing_method $config_distro__prebuilt_image_materials_reusing_method dontforce
+	fi
+
+	debug_do_or_die remove_target_and_link_if_src_exists $distro__prebuilt_image_materials_installables_folders_dir $distro__image_materials_installables_folders_dir $config_distro__prebuilt_image_materials_reusing_method dontforce
+
+	debug_do_or_die remove_target_and_link_if_src_exists $distro__prebuilt_image_materials_installables_overlays_dir $distro__image_materials_installables_overlays_dir $config_distro__prebuilt_image_materials_reusing_method dontforce
+
+	debug_do_or_die remove_target_and_link_if_src_exists $distro__prebuilt_image_materials_installables_writableoverlays_dir $distro__image_materials_installables_writableoverlays_dir $config_distro__prebuilt_image_materials_reusing_method dontforce
+}
+
+# : ${config_distro__reuse_installables_=""}
+# : ${config_distro__reuse_ramdisk_from_path=""}
+# : ${config_distro__reuse_kernel_from_path=""}
+# : ${config_distro__reuse_kernel_from_path=""}
+# : ${config_buildtasks__do_build_ramdisk=true}
+# : ${config_buildtasks__do_build_kernel=true}
+# : ${config_buildtasks__do_build_drivers=false}	# May do for out of tree drivers (that is not part of the Linux kernel)
+# : ${config_buildtasks__do_build_bootloader=false}
+# : ${config_buildtasks__do_build_tee=false}
+# : ${config_buildtasks__do_build_firmware=false}	# May do for out of tree firmware (that is not part of the Linux kernel), and external devices (i.e. firmware)
+# : ${config_buildtasks__do_build_bios=false}		# Could do (e.g. for QEMU bios)
+# : ${config_buildtasks__do_build_hardware=false}	# Won't do... but one could build FPGA firmware here etc, or if you feel like providing HDL/RTL etc and package them for synthesis, enjoy...

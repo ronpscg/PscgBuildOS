@@ -1,0 +1,24 @@
+#
+# The objective of this service is to provide a very simple way to demonstrate weston starting
+# You would usually use a configuration file and or more configuration options. For a demonstration
+# and for further building on it, you can happily use this
+#
+# Note that:
+# 1. You would usually run as a dedicated user, not as root. The service intentionally runs as root.
+# 2. In past versions of this file, there was a --tty parameter. It has been deprecated for a while, and in newer versions using it will cause weston to exit.
+#    If you are building older Debian or Ubuntu versions, you may want to readd it to the ExecStart
+#
+[Unit]
+Description=Weston trivial starter
+
+[Service]
+Environment="XDG_RUNTIME_DIR=/tmp/xdg-runtime-dir"
+Environment="DEFAULT_WESTON_RESTART_TIMEOUT=5"
+ExecStartPre=/bin/sh -c "[ -d $XDG_RUNTIME_DIR ] || mkdir -p $XDG_RUNTIME_DIR"
+ExecStart=weston
+SyslogIdentifier=weston
+Restart=always
+RestartSec=$DEFAULT_WESTON_RESTART_TIMEOUT
+
+[Install]
+WantedBy=graphical.target

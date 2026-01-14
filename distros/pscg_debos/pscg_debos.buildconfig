@@ -1,0 +1,211 @@
+pscg_debos__set_arch_specific_variables_if_needed() {
+	local bspname_archnamefixup
+	# debootstrap uses different names from the kernel and from qemu, so there is no choice but to multiple if/else case/esac
+	case $ARCH in
+		arm64|aarch64)
+			: ${config_pscgdebos__debian_arch=arm64}
+			bspname_archnamefixup=arm64
+			;;
+		riscv|riscv64)
+			bspname_archnamefixup=riscv64
+			: ${config_pscgdebos__debian_arch=riscv64}
+			;;
+		arm|armhf)
+			bspname_archnamefixup=armhf	# Since both Ubuntu and Debian support it. Ubuntu does not support armel
+			case "$config_toplevel__arch_subarch" in
+				arm|armv7|armv6|armv5|armel)
+					: ${config_pscgdebos__debian_arch=armel}
+					;;
+				*)
+					: ${config_pscgdebos__debian_arch=armhf}
+					;;
+			esac
+			;;
+		armel)
+			fatalError "Ubuntu does not support armel, and so we moved to the arch_subarch mechanism for that (among other things)"
+			;;
+		x86_64)
+			: ${config_pscgdebos__debian_arch=amd64}
+			bspname_archnamefixup=amd64
+			config_pscgdebos__ubuntu_base_url="http://archive.ubuntu.com/ubuntu/"
+			;;
+		i386)
+			;&
+		i686)
+			# All of this will be refactored - as i386 has not been tested on the other distros properly
+			if ! [ "${config_distro}" = "pscg_busyboxos" ] ; then
+				warn "i386 has not yet been tested with Debian or Ubuntu"
+				hardWarn "Testing temporarily - not yet with Debian or Ubuntu ,but with busyboxos"
+				# Still need to fix that...
+				: ${config_pscgdebos__debian_arch=i386}
+				config_pscgdebos__ubuntu_base_url="http://archive.ubuntu.com/ubuntu/"
+				#fatalError "Did not check it properly yet so keep it here"
+			fi
+
+			bspname_archnamefixup=i686 # TODO: it is now a link to the same qemu of amd64 - which is perfect for the default configuration
+			;;
+		loongarch|loongarch64|loong64)
+			: ${config_pscgdebos__debian_arch=loong64}
+			bspname_archnamefixup=loongarch64 # deliberatley - different name from Debian as I want to break it from the other conventions
+			config_pscgdebos__debian_base_url="http://ftp.ports.debian.org/debian-ports "
+			# Note: Ubuntu does not support loongarch64, so default here is set to Debian, but it's up to the user...
+			config_pscgdebos__ubuntu_base_url="UBUNTU_DOES_NOT_SUPPORT_loongarch_YET"
+
+			# Not all packages are available. As per the time of writing:
+			# E: Package 'firefox-esr' has no installation candidate
+			# E: Package 'chromium' has no installation candidate
+			;;
+		powerpc)
+			bspname_archnamefixup=ppc64le
+			: ${config_pscgdebos__debian_arch=ppc64el}
+			;;
+		s390)
+			bspname_archnamefixup=s390x
+			: ${config_pscgdebos__debian_arch=s390x}
+			;;
+		sparc64)
+			bspname_archnamefixup=sparc64
+			: ${config_pscgdebos__debian_arch=sparc64}
+			config_pscgdebos__debian_base_url="http://ftp.ports.debian.org/debian-ports "
+
+			# Note: Ubuntu does not support sparc or sparc64
+			config_pscgdebos__ubuntu_base_url="UBUNTU_DOES_NOT_SUPPORT $ARCH"
+			;;
+		*)
+			fatalError "${BASH_SOURCE[0]} Unsupported ARCH $ARCH"
+			: ${config_pscgdebos__debian_arch=$(uname -m)} # may fail but we don't really intend to support everything
+			bspname_archnamefixup=$(uname -m)
+			;;
+	esac
+
+	if [ "$config_pscgdebos__debian_codename" = "sid" -o "$config_pscgdebos__debian_codename" = "unstable" ] && [ "$config_pscgdebos__debian_base_url" = "http://ftp.ports.debian.org/debian-ports" ] ; then
+		# If using "sid", Sometimes you will need to check the keys, sometimes not. It can be very fragile,
+		# especially around stable distro releases. So just avoid checking it.
+		# Welcome to the world of Debian schenanigans.
+		#
+		# Avoid key check (e.g. #E: Release signed by unknown key (key id 3AF65F93D6FBC5B9)
+		#)You can alternatively do the right thing at your build hots and follow the instructions at:
+		#The specified keyring /usr/share/keyrings/debian-archive-keyring.gpg may be incorrect or out of date.
+		#You can find the latest Debian release key at https://ftp-master.debian.org/keys.html
+		debianDebootstrapExtraArgs=" --no-check-gpg "
+	fi
+
+	#TODOJUL - we need to change debos to buildos - bsp might be similar -
+	#TODOJUL - this file should be generic for all distros - so all the bspname fixups for qemu need to be changed as well
+
+	export config_bsp_layer=bsp/recipes/linux/bsp-pscg_debos-qemu-$bspname_archnamefixup
+	export config_pscgdebos__debian_arch config_pscgdebos__debian_base_url config_pscgdebos__ubuntu_base_url
+	export debianDebootstrapExtraArgs
+
+	# We will need to change them for debian etc.
+}
+pscg_debos__set_arch_specific_variables_if_needed
+source $BUILD_TOP/distros/pscg_debos/recipes/rootfs/debos-common.inc # no need to hide behind variables - this is very specific to this distro
+debos_common_init_env
+
+info_do_or_die $BUILD_TOP/distros/pscg_debos/sanity/prebuild-sanity-check-debian-ubuntu-versions.sh
+
+export distro__identifier_name=${config_distro}-${config_pscgdebos__debian_or_ubuntu}-${config_pscgdebos__debian_codename}-${config_pscgdebos__debian_variant}-${config_pscgdebos__debian_arch}
+
+
+	# Debian status:
+		# Tested with Debian: forky, trixie, bookworm, bullseye.
+		# Older distros are in https://archive.debian.org/debian/
+		# Ubuntu packages are not the same, so the build fails
+	# Ubuntu status:
+		# Since we added all the desktop packages and browsers, newer Ubuntu versions don't build
+		# Since M. Shuttleworth is not responding to an email I sent, and so is the DroidCon London guy from 2013, I have lesser motivation to test
+
+# there are too many considerations, and while a reasonable default would be systemd, we deliberately set the default value to something lighet
+# The expectation is that the  build system user will decide this variable prior to invoking the build script
+# config_pscgdebos__init_frameworks="finit-sysv systemd" # This is commented out due to the debos graphics layer lightdm addition being incompatible with both. This was a comment added during a meetup, and so it remains as is (if you want to use a system without a display manager that is fine and you can uncomment the line"
+: ${config_pscgdebos__init_frameworks="finit-sysv"}	# you can specify several, and the last would count. but just specify one
+export config_pscgdebos__init_frameworks
+
+source_file_or_die $DISTROS_DIR/common-linux/pscg_linux.buildconfig
+
+: ${config_pscgdebos__deb_packages_extra=""} # List of packages to install regardless of whatever is in the scripts (or in addition)
+export DEB_PACKAGE_LIST						 # List of packages to install *except* for those in debootstrap. We don't count them!
+export DEB_CONFLICTING_PACKAGE_LIST			 # List of packages that are to be installed (or more precisely, downloaded) separately, to avoid apt failing on known incompatbailities
+export config_pscgdebos__deb_packages_extra
+
+# Uncomment and put your own if you want to fix a specific fingerprint (otherwise, any fingerprint would mean "valid")
+#: ${config_pscgdebos__expected_debootstrap_fingerprint="Mon Mar 18 12:59:46 PM IST 2024"}	# set to a value only if you want debootstrap caches recreated. Otherwise, having the marker is enough
+: ${config_pscgdebos__expected_debootstrap_fingerprint=""} # set to a value only if you want debootstrap caches recreated. Otherwise, having the marker is enough
+: ${config_pscgdebos__recreate_debootstrap_cache_on_unmatching_fingerprints=true}	# must be true for debootstrap - unless you just want to explore things. debootstrap requires an empty folder
+
+# Uncomment and put your own if you want to fix a specific fingerprint (otherwise, any fingerprint would mean "valid")
+#: ${config_pscgdebos__expected_debcaches_fingerprint="Mon Mar 18 01:13:12 PM IST 2024"}	# set to a value only if you want debootstrap caches recreated. Otherwise, having the marker is enough
+: ${config_pscgdebos__expected_debcaches_fingerprint=""}	# set to a value only if you want debootstrap caches recreated. Otherwise, having the marker is enough
+: ${config_pscgdebos__recreate_debcaches_on_unmatching_fingerprints=true}	# set to true only if you want mismatching fingerprints to result in redoing debootstrap
+
+: ${config_pscgdebos__postbuild_clean_apt_caches=false}		# if true, this will clean up some apt caches and will force apt update on the target if one wants to reinstall the system
+
+export config_pscgdebos__expected_debootstrap_fingerprint config_pscgdebos__recreate_debootstrap_cache_on_unmatching_fingerprints
+export config_pscgdebos__expected_debcaches_fingerprint config_pscgdebos__recreate_debcaches_on_unmatching_fingerprints
+export config_pscgdebos__postbuild_clean_apt_caches
+# TODO unset these - these are meant to be use
+
+#
+# Add a package to the list of conflicting package list. If it appears more than once, let it be, so just keep it simple here.
+# These packages will be installed (downloaded to be more precise, by caching) one by one.
+#
+pscg_debos__add_to_conflicting_package_list() {
+	DEB_CONFLICTING_PACKAGE_LIST="$DEB_CONFLICTING_PACKAGE_LIST $@"
+}
+
+#
+# This is mostly used as a trick to increase the cache hits for different build, and allow incompatible packages
+# just for knowing their existence, without adding to the cache *only* if they are to be built
+# The idea here is to maximize offline builds
+#
+# The function has the side effect of adding a package to a single apt-get installation (e.g. --download-only for caches), only if it
+# does not appear in DEB_CONFLICTING_PACKAGE_LIST
+#
+pscg_debos__handle_package_conflicts() {
+	local rc=0
+	for p in $@ ; do
+		if echo $DEB_CONFLICTING_PACKAGE_LIST | grep -q $p ; then
+			rc=1
+			warn "$p has known conflicts!"
+			continue
+		fi
+		if ! echo $DEB_PACKAGE_LIST | grep -q $p ; then
+			DEB_PACKAGE_LIST="$DEB_PACKAGE_LIST $p"
+		fi
+	done
+	return $rc
+}
+
+pscg_debos__add_to_package_list() {
+	# check that this package does not have known conflicts first.
+	# if there are, they are handled in that function which is more complex
+	if ! pscg_debos__handle_package_conflicts $@ ; then
+		return
+	fi
+	if [ -z "$DEB_PACKAGE_LIST" ] ; then
+		DEB_PACKAGE_LIST="$DEB_PACKAGE_LIST $@"
+		return
+	fi
+
+	for p in $@ ; do
+		if ! echo $DEB_PACKAGE_LIST | grep -q $p ; then
+			DEB_PACKAGE_LIST="$DEB_PACKAGE_LIST $p"
+		fi
+	done
+}
+pscg_debos__print_package_list() {
+	echo $DEB_PACKAGE_LIST	# allow the caller to set the verbosity so echo
+}
+
+pscg_debos__print_conflicting_package_list() {
+	echo $DEB_CONFLICTING_PACKAGE_LIST	# allow the caller to set the verbosity so echo
+}
+
+# The following export is not necessary, but it is here for the sake of completeness
+export config_pscgdebos__extra_layers_file
+: ${config_pscgdebos__extra_layers_file=""}}
+
+export -f pscg_debos__add_to_package_list pscg_debos__print_package_list
+export -f pscg_debos__add_to_conflicting_package_list pscg_debos__print_conflicting_package_list
+export -f pscg_debos__handle_package_conflicts # did not need to export it prior to refactoring

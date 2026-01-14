@@ -1,0 +1,69 @@
+set -a
+
+## busybox build variables
+: ${config_busybox__fetch_git_or_tarball="git"} # Obviously, this is an example fo selecting whether to work with git or a tarball, and both mechanisms are valid and good!
+: ${config_busybox__git_repo_uri="git://git.busybox.net/busybox.git"}
+# at the time of writing master is at 5f07327251c93184dfcfc8d978fc35705930ec53, latest version is 1.37.0, and we will use it when using git. Leaving the tarball version in tact as the latest stable version which is 1.36.1
+: ${config_busybox__commit=""}
+: ${BUSYBOX_VERSION=busybox-1.36.1}
+: ${BUSYBOX_TARBALL_SHA256=b8cc24c9574d809e7279c3be349795c5d5ceb6fdf19ca709f80cde50e47de314}
+: ${BUSYBOX_DEFCONFIG=defconfig}
+: ${BUSYBOX_CONFIG_FILE=${LOCAL_DIR}/$BUSYBOX_VERSION.config}
+
+: ${BUSYBOX_BUILD_WORKING_DIRECTORY=$BUILD_DIR/busybox}
+: ${BUSYBOX_SOURCE_PARENT_DIR=$BUSYBOX_BUILD_WORKING_DIRECTORY}	# used for tarball unpacking
+: ${BUSYBOX_SOURCE_DIR=$BUSYBOX_SOURCE_PARENT_DIR/busybox-src}
+: ${BUSYBOX_BUILD_DIR=$BUSYBOX_BUILD_WORKING_DIRECTORY/busybox-build}
+: ${BUSYBOX_INSTALL_DIR=$BUSYBOX_BUILD_WORKING_DIRECTORY/busybox-install}	# gets its own folder to allow reuse, and compltely decouple the build from the ramdisk state (so that the ramdisk can clean itself without touching the previous busybox installation phases, and instead just copy over)
+
+: ${config_busybox__use_config_file="false"}
+: ${config_busybox__do_fetch="true"}
+: ${config_busybox__do_unpack="true"}
+: ${config_busybox__do_config="true"}
+: ${config_busybox__do_config_if_already_built="false"} # busybox configuration takes some time and makes build takes some time when there is already a config file, and it is not very smart. so to optimize, we can skip it. They don't take very long, but it is annoying enough to quickly optimize if you are sure that you do not want to rebuild
+
+: ${config_busybox__do_make="true"}
+
+: ${config_busybox__do_install="true"} # added just to save some negligible disk space and negligible time during development
+
+set +a
+
+#
+# The function fetches and unpacks busybox, depending on whether it is a tarball or a git repository.
+#
+# Note about the function name and location:
+#   Was set in a .buildconfig to enable busybox to be worked and built separately, from other components.
+#   After some refactoring, this is not longer needed, but I will leave it here for now, as it is not harmful.
+#   The only client calling this, for now, is build-busybox.sh, so the function might be renamed and moved there
+busybox__common_init_fetch_unpack_variables() {
+	if [ "$config_busybox__fetch_git_or_tarball" = "tarball" ] ; then
+		# tarball example
+		# TODO if I do something unified, move these (as well as whether it is a repo or tarball...) to somewhere else
+		# Note: in some projects the tarball will just have the files. In others (most of them),
+		# the files will be under a main directory. Therefore it is your responsibility to know the tarball structure
+		# and set unpacking directories accordingly.
+		fetch_remote_uri=https://busybox.net/downloads/$BUSYBOX_VERSION.tar.bz2
+		fetch_local_target_path=$config_toplevel__downloads_base_path/$BUSYBOX_VERSION.tar.bz2
+		fetch_expected_sha256=$BUSYBOX_TARBALL_SHA256
+		unpack_dest_path=$BUSYBOX_SOURCE_PARENT_DIR
+		unpack_link_src=$BUSYBOX_SOURCE_PARENT_DIR/$BUSYBOX_VERSION
+		unpack_link_dst=$BUSYBOX_SOURCE_DIR
+		post_unpack_command="[ -L $unpack_link_dst ] && rm $unpack_link_dst ; ln -s $unpack_link_src $unpack_link_dst  ;"
+	else
+		# git example
+		fetch_remote_uri=$config_busybox__git_repo_uri
+		: ${fetch_flags=""} # allow for extra flags, e.g. shallow clone etc.
+		fetch_local_target_path=$config_toplevel__downloads_base_path/busybox.git
+		fetch_expected_sha256=""		# we don't care in git, we only care about the commit *if* it is specified
+		fetch_commit=$config_busybox__commit
+		unpack_dest_path=$BUSYBOX_SOURCE_DIR
+		post_unpack_command='verbose "done unpacking $unpack_dest_path \nBusybox version:\n$(head -n 6  $unpack_dest_path/Makefile | tail -5)";'
+	fi
+}
+export -f busybox__common_init_fetch_unpack_variables
+
+
+# This saves some typing and saves from wasting time. See comment in the respective devhack function
+: ${config_busybox__allow_useprevbuild_devhack="true"}
+export config_busybox__allow_useprevbuild_devhack
+

@@ -1,0 +1,16 @@
+config_kernel__list_of_defconfigs="defconfig" # Note that on kernel 6+ as per the time of writing there is no virt.config fragment for ARM in the kernel tree so this is not a mistake cf. arm64
+: ${config_kernel__list_of_config_overrides=""}
+: ${config_kernel__list_of_config_fragments=""}
+: ${config_kernel__kernel_image_type=zImage}
+
+export config_kernel__list_of_defconfigs config_kernel__list_of_config_overrides config_kernel__list_of_config_fragments config_kernel__kernel_image_type
+
+#
+# Implement this variable if you would like to override the behavior of the common kernel buildconfig
+#
+kernel__specific_init_fetch_unpack_variables() {
+	:
+}
+export -f kernel__specific_init_fetch_unpack_variables
+
+# TODO arm: no network interface by defconfig and qemu, so can add such to the config

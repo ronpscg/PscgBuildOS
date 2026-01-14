@@ -1,0 +1,28 @@
+# PowerPC little-endian kernel config - copied without any modifications from the s390x kernel config - only selecting the zImage.pseries executable
+#         as QEMU can load it without providing a separate device tree, and it is PAPR compatible on its own
+config_kernel__list_of_defconfigs="defconfig"
+
+#
+# in riscv: mounting fat with the default config will get short path names so the fat installer will not work well
+# "IO charset iso8859-1 not found"
+# The reason for this is CONFIG_NLS_ISO8859_1=m
+# solutions:
+# - install the module of nls_iso8859-1
+# - CONFIG_NLS_ISO8859_1=y
+#
+#
+: ${config_kernel__list_of_config_overrides="CONFIG_NLS_ISO8859_1=y"}
+: ${config_kernel__list_of_config_fragments=""}
+: ${config_kernel__kernel_image_type=zImage.pseries}
+
+config_kernel__list_of_config_overrides+=" CONFIG_VFAT_FS=y CONFIG_FAT=y CONFIG_VIRTIO_NET=y CONFIG_VIRTIO_PCI=y CONFIG_VIRTIO_BLK=y CONFIG_VIRTIO_CONSOLE=y CONFIG_VIRTIO_MMIO=y CONFIG_NLS_CODEPAGE_437=y"
+
+export config_kernel__list_of_defconfigs config_kernel__list_of_config_overrides config_kernel__list_of_config_fragments config_kernel__kernel_image_type
+
+#
+# Implement this variable if you would like to override the behavior of the common kernel buildconfig
+#
+kernel__specific_init_fetch_unpack_variables() {
+	:
+}
+export -f kernel__specific_init_fetch_unpack_variables

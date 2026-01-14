@@ -1,0 +1,28 @@
+config_kernel__list_of_defconfigs="defconfig"
+
+: ${config_kernel__list_of_config_overrides="CONFIG_NLS_ISO8859_1=y CONFIG_64BIT=y"}
+: ${config_kernel__list_of_config_fragments=""}
+: ${config_kernel__kernel_image_type=image}
+
+export config_kernel__list_of_defconfigs config_kernel__list_of_config_overrides config_kernel__list_of_config_fragments config_kernel__kernel_image_type
+
+#
+# Implement this variable if you would like to override the behavior of the common kernel buildconfig
+#
+kernel__specific_init_fetch_unpack_variables() {
+	:
+}
+export -f kernel__specific_init_fetch_unpack_variables
+
+
+kernel__specific_do_make_install() {
+	cp ${LINUX_BUILD_DIR}/.config ${LINUX_INSTALL_DIR}/$config_kernel__kernel_config_out_name
+
+	# copy kernel files to the boot partition
+	cp ${LINUX_BUILD_DIR}/arch/sparc/boot/$config_kernel__kernel_image_type ${LINUX_INSTALL_DIR}/ || fatalError "Failed to copy kernel image to the install dir"
+	cp $LINUX_INSTALL_DIR/$config_kernel__kernel_image_type $BOOT_DIR/$config_kernel__kernel_image_type || fatalError "Failed to copy kernel image to $BOOT_DIR"
+	cp $LINUX_INSTALL_DIR/$config_kernel__kernel_config_out_name $BOOT_DIR/ || error "Failed to copy the kernel config to $BOOT_DIR. It is negligible"
+
+	call_if_exists do_install_dtbs
+}
+export -f kernel__specific_do_make_install

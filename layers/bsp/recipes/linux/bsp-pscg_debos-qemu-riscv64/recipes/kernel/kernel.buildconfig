@@ -1,0 +1,24 @@
+config_kernel__list_of_defconfigs="defconfig"
+
+#
+# in riscv: mounting fat with the default config will get short path names so the fat installer will not work well
+# "IO charset iso8859-1 not found"
+# The reason for this is CONFIG_NLS_ISO8859_1=m
+# solutions:
+# - install the module of nls_iso8859-1
+# - CONFIG_NLS_ISO8859_1=y
+#
+#
+: ${config_kernel__list_of_config_overrides="CONFIG_NLS_ISO8859_1=y"}
+: ${config_kernel__list_of_config_fragments=""}
+: ${config_kernel__kernel_image_type=Image}
+
+export config_kernel__list_of_defconfigs config_kernel__list_of_config_overrides config_kernel__list_of_config_fragments config_kernel__kernel_image_type
+
+#
+# Implement this variable if you would like to override the behavior of the common kernel buildconfig
+#
+kernel__specific_init_fetch_unpack_variables() {
+	:
+}
+export -f kernel__specific_init_fetch_unpack_variables

@@ -1,0 +1,105 @@
+#
+# This script handles copying of linux-firmware from well known places to a folder of our choice.
+# This would most likely be the target rootfs /lib/firmware/ folder, or if you are using an initramfs, the /lib/firmware/ folder in the initramfs
+# at the moment it does not consider packing it within the kernel image, this might be addressed in the firmware or kernel
+# building recipes, and given specific prebuilts
+#
+# Do notice that in practice, you might want to copy only a subset of the firmware files, as the entire linux-firmware repository is huge.
+#
+# Terminology:
+# - linux-firmware: the official linux-firmware repository (i.e. cloned from git://git.kernel.org/pub/scm/linux/kernel/git/firmware/linux-firmware.git)
+#
+# You may provide additional firmware repositories, and set config_firmware__linux_firmware_dir and
+# the respectiive config_firmware__linux_firmware_..._files_list
+# prior to calling copy_linux_firmware_to_folder()
+#
+
+: ${config_firmware__linux_firmware_dir="$HOME/dev/otaworkshop/oot/linux-firmware"}
+
+# Firmware can be copied in one of three cases:
+: ${config_firmware__linux_firmware_builtin_files_list=""} 	 # 1. Copied into the kernel builtin (by the kernel build code)
+: ${config_firmware__linux_firmware_initramfs_files_list=""} # 2. Copied to initramfs (in do_build_ramdisk)
+: ${config_firmware__linux_firmware_rootfs_files_list=""}	 # 3. Copied to the richos (to the rootfs)
+
+export config_firmware__linux_firmware_builtin_files_list config_firmware__linux_firmware_initramfs_files_list config_firmware__linux_firmware_rootfs_files_list
+
+export config_firmware__linux_firmware_dir
+
+export PREBUILT_DIR_LINUX_FIRMWARE_BASE=$config_firmware__linux_firmware_dir
+
+#
+# Populate firmware under $1/lib/firmware
+# $1 firmware files list
+# $2 dst directory - target rootfs or initramfs folder.
+#
+copy_linux_firmware_to_folder() {
+	local list=$1
+	local dst=$2
+	local SUDO=${3-""}
+	local libfirmwaredir=$dst/lib/firmware
+	dod [ -d "$dst" ]
+	[ -d "$libfirmwaredir" ] || dod $SUDO mkdir -p $libfirmwaredir
+	for f in $list ; do
+		verbose_do_or_die copy_one_file_from_src_to_dst_creating_directories $f $PREBUILT_DIR_LINUX_FIRMWARE_BASE $libfirmwaredir $SUDO
+	done
+
+}
+export -f copy_linux_firmware_to_folder
+
+# Populate firmware under $1/lib/firmware
+# $1 type of firmware list: <builtin_files_list|initramfs|rootfs>
+sanity_check_firmware_config() {
+	local list=$(eval echo \$$(echo "config_firmware__linux_firmware_${1}_files_list"))
+	local srcdir=$config_firmware__linux_firmware_dir
+
+	printvars list srcdir
+	if [ -z "$list" ] ; then
+		return
+	fi
+	if [ ! -d "$srcdir" ] ; then
+		fatalError "$config_firmware__linux_firmware_dir does not exist. Please set config_firmware__linux_firmware_dir properly. You may want to get the source code from somewhere e.g. git clone git://git.kernel.org/pub/scm/linux/kernel/git/firmware/linux-firmware.git $config_firmware__linux_firmware_dir"
+	fi
+	if [ ! -d "$config_firmware__linux_firmware_dir" ] ; then
+		fatalError "config_firmware__linux_firmware_dir ($config_firmware__linux_firmware_dir) does not exist or is not a directory"
+	fi
+
+	# This next line is sort of temporary - for build optimization if you want to run this *early* during the build, and fail before
+	# building other components if the firmware files do nt exist
+	# If you *build* firmware you want to disable this check! [it is not expected though!]
+	local check_existence=true
+	if [ "$check_existence" = true ] ; then
+		for f in $list ; do
+			if [ ! -f "$srcdir/$f" ] ; then
+				fatalError "Firmware file $f does not exist under $srcdir"
+			fi
+		done
+	fi
+}
+export -f sanity_check_firmware_config
+
+# Utility function to be called from the initramfs build scripts
+add_firmware_to_initramfs() {
+	copy_linux_firmware_to_folder "$config_firmware__linux_firmware_initramfs_files_list" "$RAMDISK_DIR"
+}
+export -f add_firmware_to_initramfs
+
+# Utility function to be called from the distros build scripts (and to decide where and how to add firmware,
+# e.g. directly to the system image, or to an overlay, or to a writable overlay [the latter would be less useful]
+# The calling function will decide what to do with the copying (whether to copy it directly ,add as a tarball, or something else)
+add_firmware_to_rootfs() {
+	copy_linux_firmware_to_folder "$config_firmware__linux_firmware_rootfs_files_list" "$distro__image_materials_workdir_specific_linux_firmware"
+}
+export -f add_firmware_to_rootfs
+
+# Utility function to be called from the kernel build scripts
+# to add firmware to the kernel builtin
+# This can be done either by adding to: config_kernel__list_of_config_overrides or config_kernel__list_of_config_fragments
+add_firmware_to_kernel_builtin() {
+	config_kernel__list_of_config_overrides+=" \
+		CONFIG_EXTRA_FIRMWARE=\"$config_firmware__linux_firmware_builtin_files_list\" \
+		CONFIG_EXTRA_FIRMWARE_DIR=$config_firmware__linux_firmware_dir \
+	"
+
+	verbose "Adding firmware to kernel builtin: $(printvars config_kernel__list_of_config_overrides)"
+}
+export -f add_firmware_to_kernel_builtin

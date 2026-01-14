@@ -1,0 +1,95 @@
+# configuration and working configuration options
+: ${config_imager__staging_list_of_image_creation_scripts_to_run=""} 	# scripts to run under the staging/ dir .
+																	 	# This had make-noninstaller-storage.sh for a while, but its logic was merged into make-installer-ota-recovery-images.sh
+																	 	# (even for non QEMU BSPs beause its one line plus and if)
+: ${config_imager__staging_do_non_staging_stuff="true"} 				# true if you want to run the $config_imager__list_of_image_creation_scripts_to_run
+: ${config_imager__list_of_image_creation_scripts_to_run="make-installer-ota-recovery-images.sh"} # run all these scripts in the order they are listed to build the images
+: ${config_imager__copy_system_image_to_qemu_storage_path=true}			# Allows to quickly test the installed system image in qemu, by copying the system image to the qemu storage device.
+																		# If you don't want to create the installer_image and/or compress it, or you want to test the system.img while the
+																		# builder assumes the more time consuming tasks of compressing the images etc., and you have the storage space, it is
+																		# a good idea to set this to true. Otherwise, it will be set to false.
+																		# The idea is to use it as a "live image" for testing purposes. Do note that this will not install overlays
+																		# (but you could use the OTA mechanism to install the overlays as well, for example...)
+: ${config_imager__create_installer_image=true}							# The installer image is a dd-able file. If you only want to create ota-able images it is not necessary
+: ${config_imager__compress_installer_image=false}						# Unless you plan to push it somewhere or back it up, set to false by default
+: ${config_imager__installer_image_file="${config_toplevel__shared_artifacts}/images/$BUILD_IMAGE_VERSION-installer.img"}	# path of the output file of the installer
+: ${config_imager__installer_image_file_tarball="${config_imager__installer_image_file}.tar.xz"} 					# installer file, compressed (in case you want to send it to someone)
+
+
+export config_imager__staging_list_of_image_creation_scripts_to_run config_imager__staging_do_non_staging_stuff
+export config_imager__list_of_image_creation_scripts_to_run config_imager__copy_system_image_to_qemu_storage_path
+export config_imager__create_installer_image config_imager__compress_installer_image  config_imager__installer_image_file config_imager__installer_image_file_tarball
+
+: ${config_imager__create_ota_image=true}	# Set to true if you want to create an OTA tarball (and the recovery tarball which is identical, and the installer image that is based on it). Setting this to false speeds up build times and reduces space, when you play with the system, or just need a workable system.img.
+export config_imager__create_ota_image
+
+
+# Cleanup and debugging options
+: ${config_imager__workdir_start_from_scratch=true}				# Cleanup previous working directory
+: ${config_imager__installer_workdir_start_from_scratch=true}	# Cleanup previous installer working directory
+export config_imager__workdir_start_from_scratch config_imager__installer_workdir_start_from_scratch
+
+# Removable media information
+: ${config_imager__installer_filesystem_type="fat"}			# if 1, an sdcard image will be created out of the working directory, to flash on a removable media or to be booted from an emulator or an emulated docker
+: ${config_imager__installer_media_fat_label=PSCGINSTALL}	# the ramdisk code will be looking for this exact label
+# 4GB was not enough for loongarch sid
+: ${config_imager__installer_media_size_sectors=$((2*SECTORS_PER_GIB))}				# 2GB unless you change it: 4194304=$((2*1024*1024*1024/512))
+: ${config_imager__installer_media_fat_label_start_sector=$(($SECTORS_PER_MIB))} 	# You can set it to 0 for emulators and most hardware, unless the bootloader expects code at the beggining of the media
+
+
+: ${config_imager__installer_media_ext_partitions_from="folders"} 			# "folders" for using the build output, "prebuilts" for providing prebuilt images, to be copied to the installables/ext4images folder.
+: ${config_imager__installer_media_ext_partitions_prebuilts_src_folder=""}	# a folder that would contain prebuilt images to be packed in an installer [e.g. if you want to backup a system, and then flash it or OTA it into another one. Not standard, but educationally (and practically, debugging, etc.) helpful]]
+
+# Working directory and ota tarball
+: ${config_imager__version="$BUILD_IMAGE_VERSION"}						# Identical to BUILD_IMAGE_VERSION - listed separately to emphasize that only the imager subsystem uses it
+: ${config_imager__workdir_ext_partition_images=${TMP_TOP}/staging-${ARCH_SUBARCH_STRING}/wip-images} # The system partition, and potentially other partitions, will be packed into images under this folder
+: ${config_imager__workdir="${TMP_TOP}/staging-${ARCH_SUBARCH_STRING}/installer_fs_workdir"} # The file system contents of the installation media and the OTA tarball will be populated here
+
+: ${config_imager__workdir_compressed=${config_toplevel__shared_artifacts}/ota/${BUILD_IMAGE_VERSION}.tar.xz}	# The materials for the OTA/recovery tarball - this is the OTA - same as recovery
+: ${config_imager__recovery_tarball=$config_imager__workdir_compressed}			# The materials for the OTA/recovery tarball - this is the recovery - same as OTA
+export config_imager__workdir config_imager__workdir_compressed config_imager__recovery_tarball
+
+: ${config_imager__installer_workdir="${TMP_TOP}/staging-${ARCH_SUBARCH_STRING}/installer-workdir"} # This is a folder used only to mount the installer image
+
+export config_imager__installer_workdir
+
+
+# Recovery. Will stick to a simple one - a golden image having this OTA tarball. One could provide a prebuilt if they wanted etc...
+: ${config_imager__create_recovery_image=true}
+: ${config_imager__recovery_partition_label=recoverytarball}
+export config_imager__create_recovery_image config_imager__recovery_partition_label
+
+
+export config_imager__installer_filesystem_type
+export config_imager__installer_media_fat_label
+export config_imager__installer_media_size_sectors
+export config_imager__installer_media_fat_label_start_sector
+export config_imager__installer_media_ext_partitions_from
+
+
+: ${config_imager__autoflash=true}
+: ${config_imager__dontformatemmc=false}
+: ${config_imager__allow_missing_system_installation=false}
+
+# These two are only applicable for the installer media installer in mode a_only.
+# Setting them to false will make flashing faster, but only if it's not the first time!
+: ${config_imager__installer_runtime_recreate_partitions=true} 		# You can save time in installation if you know for sure the partitions are the same
+: ${config_imager__installer_runtime_format_system_partition=true}	# Assuming the system.img exists and is valid, you can save time by not formatting it - as it will be replaced with a dd-able system.img anyhow
+
+export config_imager__autoflash
+export config_imager__dontformatemmc
+export config_imager__allow_missing_system_installation
+export config_imager__installer_runtime_recreate_partitions
+export config_imager__installer_runtime_format_system_partition
+
+# These are points for discussion (not implemented).
+# What if you want to keep some configuration files or contents?
+# You can do it in all kind of forms, and all kinds of mechanisms, including
+# from within the flasher itself, if you design a storage place that is not formatted
+# before formatting other partitions. It is per project obviously
+: ${config_imager__backuppartitions=false}
+: ${config_imager__backupfolders=false}
+export config_imager__config_imager__backuppartitions config_imager__config_imager__backupfolders
+
+# This is to be used by the ramdisk code, but is directly related to the image generation process so it is under the image packer
+export imager__target_partition_defs_generator=$LAYERS_DIR/common/recipes/image/generate-target-flasher-partition-defs.sh
