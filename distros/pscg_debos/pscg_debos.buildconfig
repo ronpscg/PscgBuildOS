@@ -122,6 +122,10 @@ export distro__identifier_name=${config_distro}-${config_pscgdebos__debian_or_ub
 : ${config_pscgdebos__init_frameworks="finit-sysv"}	# you can specify several, and the last would count. but just specify one
 export config_pscgdebos__init_frameworks
 
+# There are many considerations for network managers. Don't use any, unless specifically requested to
+: ${config_pscgdebos__network_manager=""}
+export config_pscgdebos__network_manager
+
 source_file_or_die $DISTROS_DIR/common-linux/pscg_linux.buildconfig
 
 : ${config_pscgdebos__deb_packages_extra=""} # List of packages to install regardless of whatever is in the scripts (or in addition)
