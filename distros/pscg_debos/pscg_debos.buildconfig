@@ -93,7 +93,7 @@ pscg_debos__set_arch_specific_variables_if_needed() {
 	#TODOJUL - we need to change debos to buildos - bsp might be similar -
 	#TODOJUL - this file should be generic for all distros - so all the bspname fixups for qemu need to be changed as well
 
-	export config_bsp_layer=bsp/recipes/linux/bsp-pscg_debos-qemu-$bspname_archnamefixup
+	export config_bsp__qemu_layer=bsp/recipes/linux/bsp-pscg_debos-qemu-$bspname_archnamefixup
 	export config_pscgdebos__debian_arch config_pscgdebos__debian_base_url config_pscgdebos__ubuntu_base_url
 	export debianDebootstrapExtraArgs
 

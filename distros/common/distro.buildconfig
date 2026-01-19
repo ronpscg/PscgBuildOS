@@ -2,6 +2,8 @@ source $DISTROS_DIR/common/distro_reuse_common.inc
 source $DISTROS_DIR/common/distro_reuse_materials.buildconfig
 source $DISTROS_DIR/common/distro_reuse_build_src_and_arch_intermediates.buildconfig
 
+export config_bsp_layer		# path of the BSP layer, either relative to BUILD_TOP or absolute
+
 # TODO add to debootstrap scripts: /proc/ is not mounted, but required for successful operation of systemd-tmpfiles. Please mount /proc/. Alternatively, consider using the --root= or --image= switches.
 
 #
@@ -68,6 +70,11 @@ distro_common___set_arch_specific_variables_if_needed() {
 			;;
 	esac
 
-	export config_bsp_layer=bsp/recipes/linux/bsp-pscg_debos-qemu-$bspname_archnamefixup
+	export config_bsp__qemu_layer=$LAYERS_DIR/bsp/recipes/linux/bsp-pscg_debos-qemu-$bspname_archnamefixup
+
+	if [ -z "${config_bsp_layer}" ] ; then 
+		warn "config_bsp_layer is empty - assuming for backward compatibility that you are aiming at building a QEMU BSP (this might be deprecated in the future)"
+		config_bsp_layer=${config_bsp__qemu_layer}
+	fi
 }
 distro_common___set_arch_specific_variables_if_needed

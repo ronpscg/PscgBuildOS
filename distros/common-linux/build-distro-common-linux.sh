@@ -45,7 +45,7 @@ build_distro__source_build_configs() {
 	local build_configs=""
 	local more_build_configs=""
 	# On dependent recipes (e.g. common and bsp related to the same functionality), source  from the more specific to the less specific one
-	build_configs="$build_configs $LAYERS_DIR/${config_bsp_layer}/recipes/kernel/kernel.buildconfig"
+	build_configs="$build_configs ${config_bsp_layer}/recipes/kernel/kernel.buildconfig"
 
 	build_configs="$build_configs $LAYERS_DIR/bsp/recipes/linux/common-linux/common-linux.buildconfig"
 	build_configs="$build_configs $LAYERS_DIR/common/recipes/kernel/kernel.buildconfig"
@@ -90,8 +90,12 @@ build_distro__source_shell_scripts() {
 	if [ "$config_buildtasks__do_build_kernel" = "false" -a "$config_buildtasks__do_build_kernel_modules" = "false" ] ; then
 		return
 	fi
+
+	# In this case we source the common file before the more specific ones (if the latter exists), because the more specific one would implement
+	# functions that have the exact same name on the one hand (intentional, but might be modified), that will override completely (or use, explicitly)
+	# some of the functions defined in the former
 	source_file_or_die $LAYERS_DIR/common/recipes/kernel/build-linux-kernel.sh
-	source_if_exists $LAYERS_DIR/${config_bsp_layer}/recipes/kernel/build-linux-kernel.sh
+	source_if_exists ${config_bsp_layer}/recipes/kernel/build-linux-kernel.sh
 }
 
 #
