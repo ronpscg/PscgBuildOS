@@ -56,6 +56,7 @@ temporary_debug_print_some_distro_specific_variables() {
 prompt_user() {
 	info "Below is an excerpt of your build configuration: "
 	printvars_sorted "BUILD_OUT config_toplevel__product_build_dir_prefix config_toplevel__rebuild_from_scratch_all config_toplevel__rebuild_from_scratch_product config_distro config_buildtasks__do_build_kernel config_buildtasks__do_build_rootfs config_buildtasks__do_pack_images BUILD_IMAGE_VERSION\
+			config_bsp_layer config_bsp__qemu_layer \
 		    config_toplevel__shared_artifacts \
 			config_distro__prebuilt_image_materials_workdir \
 			config_imager__dontformatemmc config_imager__allow_missing_system_installation config_imager__installer_runtime_recreate_partitions config_imager__installer_runtime_format_system_partition \
