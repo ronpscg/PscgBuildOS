@@ -38,6 +38,19 @@ init_env() {
 }
 
 #
+# Allow the printing of other distro specific environment variables before prompting the user
+# this should not be here and is only here for debugging, because we do not want to source the distro specific code at this point
+#
+temporary_debug_print_some_distro_specific_variables() {
+	# distro specific variables - temporary
+	if [ "${config_distro}" = "pscg_debos" ] ; then
+		printvars_sorted "config_pscgdebos__expected_debootstrap_fingerprint config_pscgdebos__recreate_debootstrap_cache_on_unmatching_fingerprints\
+				config_pscgdebos__init_frameworks config_pscgdebos__network_manager\
+		"
+	fi
+}
+
+#
 # Make sure "the users knows what they are signing for" (especially for the case of reusing or removing previous builds
 #
 prompt_user() {
@@ -60,8 +73,7 @@ prompt_user() {
 	printvars_sorted "BUILD_SHARED_SRC_DIR BUILD_SHARED_ARCH_DIR BUILD_SHARED_ARCH_SUBARCH_DIR"
 	echo
 
-	# distro specific variables - temporary
-	printvars_sorted "config_pscgdebos__expected_debootstrap_fingerprint config_pscgdebos__recreate_debootstrap_cache_on_unmatching_fingerprints"
+	temporary_debug_print_some_distro_specific_variables # distro specific variables - temporary	
 
 	warn "Are you sure you would like to proceed with the build?"
 
