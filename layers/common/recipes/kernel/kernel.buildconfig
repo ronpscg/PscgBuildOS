@@ -13,9 +13,9 @@
 : ${config_kernel__do_modules=true}				# Set explicitly to false if you want to avoid building external modules and/or installing the kernel built modules, and packing all the modules into a tarball
 : ${config_kernel__do_config=true}				# Set explicitly to false if you want to avoid make config. It is assumed then that you know what you are doing
 : ${config_kernel__do_build=true}				# Set explicitly to false if you want to avoid make config. It is assumed then that you know what you are doing
-: ${config_kernel__recopy_dtb=true}				# Not relevant for all architectures, but common enough to be common
+: ${config_kernel__do_dtbs=true}				# Not relevant for all architectures, but common enough to be common
 
-export config_kernel__do_modules config_kernel__recopy_dtb
+export config_kernel__do_modules config_kernel__do_dtbs
 
 set -a
 : ${config_kernel__commit=""}
@@ -83,13 +83,14 @@ export config_kernel__edu_do_modules_prepare
 export kernel__modules_install_workdir=$LINUX_INSTALL_DIR/linux-modules
 export kernel__headers_install_workdir=$LINUX_INSTALL_DIR/linux-headers
 export kernel__modules_prepare_workdir=$LINUX_INSTALL_DIR/linux-modprepare # this is for demonstration only
+export kernel__dtbs_install_workdir=$LINUX_INSTALL_DIR/linux-dtbs	# no need to compress them
 
 
 # Might copy them with a name that specifies the version - for that the kernel version (and ideally magic) would need to be copied. Perhaps on future versions
 # TODO: tarball creation should not concern the kernel builder itself. It's a distro thing.
 export kernel__modules_install_tarball=$LINUX_INSTALL_DIR/linux-modules.tar.gz
 export kernel__headers_install_tarball=$LINUX_INSTALL_DIR/linux-headers.tar.gz
-export kernel__modules_prepare_tarball=$LINUX_INSTALL_DIR/linux-modules_prepare.tar.gz # Thiis mostly made for demostrations
+export kernel__modules_prepare_tarball=$LINUX_INSTALL_DIR/linux-modules_prepare.tar.gz # This mostly made for demostrations
 
 
 # Allow specifying specific modules to be added to the initrafms and/or rootfs

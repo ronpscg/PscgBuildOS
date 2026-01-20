@@ -285,6 +285,26 @@ kernel__do_cross_depmod() {
 }
 export -f kernel__do_cross_depmod
 
+
+#
+# Do kernel dtb install. You are not necessarily required to run this one.
+# In fact, it is recommended to not run it with the defconfigs of some architecture (arm64), as they will result in lots of files.
+# e.g. for linux-6.19-rc6, there are 1368 such files, weighing a total of 82MB, which is absolutely unnecessary, 
+# given that it is likely that your target requires one file, or a selected few.
+# 
+kernel__do_dtbs_install() {
+	if [ ! "$config_kernel__do_dtbs" = "true" ] ; then
+		warn "User opted out of installing dtbs"
+		return
+	fi
+	local prevLogTag=$logTag
+	logTag="common-build-kernel"
+
+	verbose_do_or_die make  -C $LINUX_SOURCE_DIR O=$LINUX_BUILD_DIR dtbs_install INSTALL_DTBS_PATH=$kernel__dtbs_install_workdir
+
+}
+export -f kernel__do_dtbs_install
+
 #
 # Build Linux kernel. This is generic enough to support all reasonable derivations.
 # If you would like to change its behavior in a BSP, you may define a function with the same name, and make sure you source it

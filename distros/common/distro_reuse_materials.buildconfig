@@ -59,9 +59,9 @@ reuse_build_materials() {
 		debug_do_or_die remove_target_and_link_if_src_exists $distro__prebuilt_image_materials_installables_system_dir $distro__image_materials_installables_system_dir $config_distro__prebuilt_image_materials_reusing_method sudo
 	fi
 
-	# For the boot materials, we will require an "all or nothing". Currently only for ramdisk, kernel and bootloader,
+	# For the boot materials, we will require an "all or nothing". Currently only for ramdisk, kernel and bootloader(s),
 	# but one could test for the rest as well
-	if [ ! "$config_buildtasks__do_build_ramdisk" = "true" -a ! "$config_buildtasks__do_build_kernel" = "true" -a ! "$config_buildtasks__do_build_bootloader" = "true" ] ; then
+	if [ ! "$config_buildtasks__do_build_ramdisk" = "true" -a ! "$config_buildtasks__do_build_kernel" = "true" -a ! "$config_buildtasks__do_build_bootloaders" = "true" ] ; then
 		# The installable bootfs dir
 		debug_do_or_die remove_target_and_link_if_src_exists $distro__prebuilt_image_materials_installables_bootfs_dir $distro__image_materials_installables_bootfs_dir $config_distro__prebuilt_image_materials_reusing_method
 		# The removable media specifics - this is an optional folder, which may be empty, so don't force it
@@ -74,16 +74,3 @@ reuse_build_materials() {
 
 	debug_do_or_die remove_target_and_link_if_src_exists $distro__prebuilt_image_materials_installables_writableoverlays_dir $distro__image_materials_installables_writableoverlays_dir $config_distro__prebuilt_image_materials_reusing_method dontforce
 }
-
-# : ${config_distro__reuse_installables_=""}
-# : ${config_distro__reuse_ramdisk_from_path=""}
-# : ${config_distro__reuse_kernel_from_path=""}
-# : ${config_distro__reuse_kernel_from_path=""}
-# : ${config_buildtasks__do_build_ramdisk=true}
-# : ${config_buildtasks__do_build_kernel=true}
-# : ${config_buildtasks__do_build_drivers=false}	# May do for out of tree drivers (that is not part of the Linux kernel)
-# : ${config_buildtasks__do_build_bootloader=false}
-# : ${config_buildtasks__do_build_tee=false}
-# : ${config_buildtasks__do_build_firmware=false}	# May do for out of tree firmware (that is not part of the Linux kernel), and external devices (i.e. firmware)
-# : ${config_buildtasks__do_build_bios=false}		# Could do (e.g. for QEMU bios)
-# : ${config_buildtasks__do_build_hardware=false}	# Won't do... but one could build FPGA firmware here etc, or if you feel like providing HDL/RTL etc and package them for synthesis, enjoy...

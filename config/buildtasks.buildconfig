@@ -4,6 +4,7 @@
 : ${config_buildtasks__do_build_ramdisk=true}
 : ${config_buildtasks__do_build_kernel=true}
 : ${config_buildtasks__do_build_kernel_modules=true} # This is only added to allow building existing oot modules against a kernel without building the kernel itself
+: ${config_buildtasks__do_build_kernel_dtbs=true}    # This is only added to allow building existing oot dtbs against a kernel without building the kernel itself
 
 # The next two are now ignored as they are strictly BSP related
 # We can perhaps instead do out-of-tree modules, and out-of-tree userspace
@@ -17,7 +18,8 @@
 # All of the above are selected by environment variables defined in linux-firmware.buildconfig
 : ${config_buildtasks__do_build_firmware=false}	# Out of tree firmware (that is not part of the Linux kernel), and external devices (i.e. firmware)
 
-: ${config_buildtasks__do_build_bootloader=false}
+: ${config_buildtasks__do_build_bootloaders=false}
+: ${config_buildtasks__do_build_boot_firmware=false}
 : ${config_buildtasks__do_build_tee=false}
 : ${config_buildtasks__do_build_bios=false}		# Could do (e.g. for QEMU bios)
 : ${config_buildtasks__do_build_hardware=false}	# Won't do... but one could build FPGA firmware here etc, or if you feel like providing HDL/RTL etc and package them for synthesis, enjoy...
@@ -28,7 +30,7 @@
 : ${config_buildtasks__do_unpack=true}
 : ${config_buildtasks__do_build=true}
 : ${config_buildtasks__do_package=true}
-export config_buildtasks__do_pack_images config_buildtasks__do_build_rootfs config_buildtasks__do_build_ramdisk config_buildtasks__do_build_kernel config_buildtasks__do_build_kernel_modules config_buildtasks__do_build_drivers config_buildtasks__do_build_bootloader config_buildtasks__do_build_tee config_buildtasks__do_build_firmware config_buildtasks__do_build_bios config_buildtasks__do_build_hardware
+export config_buildtasks__do_pack_images config_buildtasks__do_build_rootfs config_buildtasks__do_build_ramdisk config_buildtasks__do_build_kernel config_buildtasks__do_build_kernel_modules config_buildtasks__do_build_drivers config_buildtasks__do_build_bootloaders config_buildtasks__do_build_boot_firmware config_buildtasks__do_build_tee config_buildtasks__do_build_firmware config_buildtasks__do_build_bios config_buildtasks__do_build_hardware
 
 
 # Extra for developers

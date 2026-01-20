@@ -83,9 +83,9 @@ reuse_build_materials() {
 		debug_do_or_die remove_target_and_link_if_src_exists $distro__prebuilt_image_materials_installables_system_dir $distro__image_materials_installables_system_dir $config_distro__prebuilt_image_materials_reusing_method sudo
 	fi
 
-	# For the boot materials, we will require an "all or nothing". Currently only for ramdisk, kernel and bootloader,
+	# For the boot materials, we will require an "all or nothing". Currently only for ramdisk, kernel and bootloader(s),
 	# but one could test for the rest as well
-	if [ ! "$config_buildtasks__do_build_ramdisk" = "true" -a ! "$config_buildtasks__do_build_kernel" = "true" -a ! "$config_buildtasks__do_build_bootloader" = "true" ] ; then
+	if [ ! "$config_buildtasks__do_build_ramdisk" = "true" -a ! "$config_buildtasks__do_build_kernel" = "true" -a ! "$config_buildtasks__do_build_bootloaders" = "true" ] ; then
 		# The installable bootfs dir
 		debug_do_or_die remove_target_and_link_if_src_exists $distro__prebuilt_image_materials_installables_bootfs_dir $distro__image_materials_installables_bootfs_dir $config_distro__prebuilt_image_materials_reusing_method
 		# The removable media specifics - this is an optional folder, which may be empty, so don't force it

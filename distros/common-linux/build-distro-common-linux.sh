@@ -47,6 +47,19 @@ build_distro__source_build_configs() {
 	# On dependent recipes (e.g. common and bsp related to the same functionality), source  from the more specific to the less specific one
 	build_configs="$build_configs ${config_bsp_layer}/recipes/kernel/kernel.buildconfig"
 
+	if [ -f "${config_bsp_layer}/bsp.buildconfig" ] ; then
+		# This could go with the extra configs or the extra layers - but it is important enough and may be specific enough,
+		# so we will do it here for now. It was added to support the rewritten (2026) amlogic example which demonstrates the building of:
+		# - u-boot + extlinux
+		# - specific arm trusted firmware (we will call it boot_firmware for this sake)
+		#
+		# If will also support the x86_64 EFI example. Since Tianocore EDK2 takes a while to build and it is a specific example, and I am busy, I will not 
+		# integrate it properly at this point. It can be a good exercise for the next longer-term batch of training, or for some diligent people to take it
+		# I don't see having time for this in the next good couple of months, and I don't want to quickly hack without documenting or testing extensively, so I don't
+		# think I will personally put work on it		
+		build_configs="$build_configs ${config_bsp_layer}/bsp.buildconfig"
+	fi
+
 	build_configs="$build_configs $LAYERS_DIR/bsp/recipes/linux/common-linux/common-linux.buildconfig"
 	build_configs="$build_configs $LAYERS_DIR/common/recipes/kernel/kernel.buildconfig"
 	build_configs="$build_configs $LAYERS_DIR/bsp/recipes/linux/common-linux/firmware/linux-firmware.buildconfig" # TODO probably move places - e.g. to common/recipes/firmware/  - everything there is linux related (common/recipes) so maybe change that too
@@ -423,6 +436,11 @@ main_build_distro() {
 		warn "Skipping Linux kernel building due to user's request"
 	fi
 
+	if [ "$config_buildtasks__do_build_kernel_dtbs" = "true" ] ; then
+		build_distro__highlight_major_step_in_log "Kernel dtbs"
+		banner_and_do kernel__do_dtbs_install
+	fi
+
 	if [ "$config_buildtasks__do_build_ramdisk" = "true" ] ; then
 		build_distro__highlight_major_step_in_log "initramfs"
 		# We build the swissknife before, whether it is, or is not a part of a rootfs (can be reused)
@@ -449,14 +467,6 @@ main_build_distro() {
 		warn "Skipping adding the rootfs layers. If you don't know what you are doing this may give you hard time at run time, \x1b[06mtake heed"'!'"\x1b[0m"
 	fi
 
-	if [ "$config_buildtasks__do_build_bootloader" = "true" ] ; then
-		build_distro__highlight_major_step_in_log "Bootloader"
-		hardWarn "This is where you will call a BSP specific bootloader code."
-		warn "In this version we are not demonstrating the bootloaders"
-	else
-		warn "Skipping bootloader building"
-	fi
-
 	#
 	# Add a chance for a second repacking to the ramdisk.
 	# The reason for this, is allowing all kinds of BSP layers to decide for themselves whether they want to add some things
@@ -472,6 +482,21 @@ main_build_distro() {
 		banner_and_do $LAYERS_DIR/common/recipes/ramdisk/build-initramfs.sh repackonly     || fatalError "build-initramfs failed"
 	fi
 
+	if [ "$config_buildtasks__do_build_bootloaders" = "true" ] ; then
+		build_distro__highlight_major_step_in_log "Bootloaders"
+		hardWarn "This is where you will call a BSP specific bootloader code (U-Boot, GRUB, extlinux etc.)"
+		info_do_or_die bsp__do_build_boot_firmware
+	else
+		warn "Skipping bootloader building"
+	fi
+
+	if [ "$config_buildtasks__do_build_boot_firmware" = "true" ] ; then
+		build_distro__highlight_major_step_in_log "Boot firmware"
+		hardWarn "This is where you will call a BSP specific boot firmware (BIOS, Arm Trusted Firmware, UEFI firmware (and bootloader), OpenSBI firmware [and bootloader] etc.) "
+		info_do_or_die bsp__do_build_boot_firmware
+	else
+		warn "Skipping boot firmware building"
+	fi
 
 	build_distro__run_more_commands_before_image_packing
 
