@@ -24,11 +24,7 @@ set -a
 
 : ${config_kernel__fetch_git_or_tarball="git"} # Obviously, this is an example fo selecting whether to work with git or a tarball, and both mechanisms are valid and good!
 
-: ${config_kernel__git_repo_uri="git://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git"} # TODO: if using offline repo - don't copy, just clone the commit immediately, and with a shallow clone
-
-
-# if using offline build / a build where the repos have been cloned prior to building (for reproducibility). Note that of course all of these would require change upon kernel version changes
-: ${config_kernel__offline_git_repo_uri=$config_toplevel__downloads_base_path/linux-kernel} # TODO: I don't think we use it
+: ${config_kernel__git_repo_uri="git://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git"}
 
 : ${config_kernel__list_of_defconfigs="defconfig"}
 

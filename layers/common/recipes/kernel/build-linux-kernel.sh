@@ -15,7 +15,7 @@ init_env() {
 
 	kernel__common_init_fetch_unpack_variables
 	call_if_exists init_env_bsp_kernel
-	call_if_exists specific_init_fetch_unpack_variables
+	call_if_exists kernel__specific_init_fetch_unpack_variables
 
 	debug "Building the Linux kernel: \n--> src: $LINUX_SOURCE_DIR \n--> build: $LINUX_BUILD_DIR \n--> install $LINUX_INSTALL_DIR \nARCH=$ARCH CROSS_COMPILE=$CROSS_COMPILE"
 
