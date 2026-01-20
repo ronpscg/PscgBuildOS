@@ -1,0 +1,88 @@
+#
+# u-boot.buildconfig - derived from the generic kernel.buildconfig - removed most of the comments for brevity so you can read all explanations there
+#
+set -a
+: ${config_uboot__commit=""}
+: ${config_uboot__uboot_config_src_path=""}				# Non empty if the default config comes from a filename
+: ${config_uboot__uboot_config_out_name="u-boot.config"}	# Name to copy .config to. If you want to keep it the same, just call it .config
+
+: ${config_uboot__fetch_git_or_tarball="git"} # Obviously, this is an example fo selecting whether to work with git or a tarball, and both mechanisms are valid and good!
+
+: ${config_uboot__git_repo_uri="https://github.com/u-boot/u-boot.git"}
+
+: ${config_uboot__list_of_defconfigs="defconfig"}
+
+: ${config_uboot__list_of_config_fragments=""} # fragment files
+: ${config_uboot__list_of_config_overrides=""} # command line config
+
+: ${config_uboot__tricky_and_required_config_items=""} 			# Specified inside a sanity check function
+: ${config_uboot__autoadd_tricky_and_required_config_items=false}		# Setting to true will try to opportunisticly auto add a helper config that sets things you might not expect to deal with like some charset encodings
+: ${config_uboot__fail_on_missing_tricky_and_required_config_items=true}	# Setting to true will fail if config is not available
+export config_uboot__tricky_and_required_config_items config_uboot__autoadd_tricky_and_required_config_items config_uboot__fail_on_missing_tricky_and_required_config_items
+
+#
+# The following aim to save some time in merge configs, and some painful debugging when trying to script some configs
+# The idea is that only merge_config and make menuconfig et. al handle dependencies, but one is interactive
+# and the other is slow. So we provide following strategies to choose from
+# It is assumed that if you produce something, you save your configuration, and then use it as the path to config file in config_uboot__uboot_config_src_path
+#
+
+# merge_config does a good job, but makes things slower. this is the only option we will choose though, as it is the right and standard one
+# if you find yourself needing it something else, you will know to use it
+# note that for files in the uboot arch/<...>/configs/ you should use the config_uboot__list_of_defconfigs variable
+: ${config_uboot__config_fragments_build_strategy="merge_config"}	# none|merge_config
+
+# You can provide CONFIG_<...>=<value> in the build phase (not in the config). However, it is not reliable, and may
+# result in linking errors. A solution (other than make menuconfig) can be one of the following:
+# - fragment: create a temporary fragment - and then use it in the config phase. Handles dependencies, and makes config phase slower
+# - config: uses script/config --set-val (can use -e / -d if it's y/n) in the config phase
+# - sed: directly modify the uboot config file (not supported, as it doens't do anything config doesn't do, so there is no point to bother implemening it)
+# - make: set in environment variables - usually works well for small things or modules, but shuld not be relied on.
+#			e.g. make CONFIG_OVERLAY_FS=y <...> would result in x86_64 in:
+#   		LD      .tmp_vmlinux.kallsyms1
+#			ld: vmlinux.o: in function `ovl_open_realfile':
+#			file.c:(.text+0x46aef8): undefined reference to `backing_file_open'
+#
+# In the options mentioned above, the safest is fragment, but if using merge_config, which is recommended, it slows down the build
+# So the default is selected to config, and assumes you really know what you are doing (which is the only purpose of giving the cmdline options in the first place!)
+#
+: ${config_uboot__configs_overrides_build_strategy=config} # make|config|fragment|sed
+
+export config_uboot__config_fragments_build_strategy config_uboot__configs_overrides_build_strategy
+
+# TODO: Put source directories in a common place. For all open source projects
+: ${UBOOT_BUILD_WORKING_DIRECTORY=$BUILD_DIR/u-boot}
+: ${UBOOT_SOURCE_PARENT_DIR=$UBOOT_BUILD_WORKING_DIRECTORY}        # used for tarball unpacking
+: ${UBOOT_SOURCE_DIR=$UBOOT_SOURCE_PARENT_DIR/u-boot-src}
+: ${UBOOT_BUILD_DIR=$UBOOT_BUILD_WORKING_DIRECTORY/u-boot-build}
+: ${UBOOT_INSTALL_DIR=$UBOOT_BUILD_WORKING_DIRECTORY/u-boot-install}
+
+#
+# Initialize the uboot fetch/unpack variables.
+#
+uboot__common_init_fetch_unpack_variables() {
+	if [ "$config_uboot__fetch_git_or_tarball" = "tarball" ] ; then
+		# tarball example		
+		uboot_release=2026.01
+		fetch_remote_uri=https://github.com/u-boot/u-boot/archive/refs/tags/v${uboot_release}.tar.gz
+		fetch_local_target_path=$config_toplevel__downloads_base_path/u-boot-${uboot_release}.tar.gz
+		fetch_expected_sha256="03bb43c58d2343ee48dd191e0f181f0108425b179d84519add3a977071c3f654"
+		unpack_dest_path=$UBOOT_SOURCE_PARENT_DIR
+		unpack_link_src=$UBOOT_SOURCE_PARENT_DIR/u-boot-${uboot_release}
+		unpack_link_dst=$UBOOT_SOURCE_DIR
+		post_unpack_command="[ -L $unpack_link_dst ] && rm $unpack_link_dst ; ln -s $unpack_link_src $unpack_link_dst  ;"
+	else
+		# git example
+		fetch_remote_uri=$config_uboot__git_repo_uri
+		: ${fetch_flags=""} # allow for extra flags, e.g. shallow clone etc.
+		fetch_local_target_path=$config_toplevel__downloads_base_path/u-boot.git
+		fetch_expected_sha256=""		# we don't care in git, we only care about the commit *if* it is specified
+		fetch_commit=$config_uboot__commit
+		unpack_dest_path=$UBOOT_SOURCE_DIR
+		post_unpack_command='verbose "done unpacking $unpack_dest_path \u-boot version:\n$(head -n 7  $unpack_dest_path/Makefile | tail -5)";'
+	fi
+}
+
+export -f uboot__common_init_fetch_unpack_variables
+
+set +a

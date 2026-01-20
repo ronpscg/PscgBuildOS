@@ -100,15 +100,16 @@ build_distro__source_shell_scripts() {
 	# We allow for all kinds of tricks to save time on building, and so we source the scripts. However, if the kernel is not
 	# to be built, we do not want some of its fetch/unpack etc. functions defined.
 	# I suppose we could modify the names, will do it at a later pass
-	if [ "$config_buildtasks__do_build_kernel" = "false" -a "$config_buildtasks__do_build_kernel_modules" = "false" ] ; then
-		return
+	if [ "$config_buildtasks__do_build_kernel" = "false" -a "$config_buildtasks__do_build_kernel_modules" = "false" \
+	 	-a "$config_buildtasks__do_build_kernel_dtbs" = "false" ] ; then
+		:
+	else
+		# In this case we source the common file before the more specific ones (if the latter exists), because the more specific one would implement
+		# functions that have the exact same name on the one hand (intentional, but might be modified), that will override completely (or use, explicitly)
+		# some of the functions defined in the former
+		source_file_or_die $LAYERS_DIR/common/recipes/kernel/build-linux-kernel.sh
+		source_if_exists ${config_bsp_layer}/recipes/kernel/build-linux-kernel.sh
 	fi
-
-	# In this case we source the common file before the more specific ones (if the latter exists), because the more specific one would implement
-	# functions that have the exact same name on the one hand (intentional, but might be modified), that will override completely (or use, explicitly)
-	# some of the functions defined in the former
-	source_file_or_die $LAYERS_DIR/common/recipes/kernel/build-linux-kernel.sh
-	source_if_exists ${config_bsp_layer}/recipes/kernel/build-linux-kernel.sh
 }
 
 #
@@ -485,7 +486,7 @@ main_build_distro() {
 	if [ "$config_buildtasks__do_build_bootloaders" = "true" ] ; then
 		build_distro__highlight_major_step_in_log "Bootloaders"
 		hardWarn "This is where you will call a BSP specific bootloader code (U-Boot, GRUB, extlinux etc.)"
-		info_do_or_die bsp__do_build_boot_firmware
+		info_do_or_die bsp__do_build_bootloaders						
 	else
 		warn "Skipping bootloader building"
 	fi
