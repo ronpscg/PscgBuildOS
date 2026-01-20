@@ -1,0 +1,9 @@
+#
+# Config fragment for AMLogic devices that use 100Mbps ethernet with RMII PHY mode
+# This is compatible with late kernel v6.x versions, and has been written for and tested with linux-6.19.rc6
+#
+CONFIG_DWMAC_MESON=y
+CONFIG_MDIO_BUS_MUX_MESON_GXL=y
+CONFIG_PCS_XPCS=y
+CONFIG_STMMAC_ETH=y
+CONFIG_STMMAC_PLATFORM=y

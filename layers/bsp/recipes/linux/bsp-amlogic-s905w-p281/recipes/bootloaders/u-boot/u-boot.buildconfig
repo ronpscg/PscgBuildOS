@@ -1,0 +1,47 @@
+config_uboot__list_of_defconfigs=p212_defconfig
+: ${config_uboot__list_of_config_overrides='\
+	CONFIG_ENV_IS_NOWHERE=n CONFIG_ENV_IS_IN_MMC=y  CONFIG_ENV_OFFSET=0x300000 \
+	CONFIG_DEFAULT_DEVICE_TREE=\"amlogic/meson-gxl-s905w-p281\" \
+	CONFIG_LZO=y CONFIG_BZIP2=y \
+'} # LZO was added to support libre images when I was / am trying audio stuff
+: ${config_uboot__list_of_config_fragments=""}
+: ${config_uboot__uboot_image_type=u-boot.bin}
+
+# The next line of code is related to the build system - not to the configuration itself.
+# U-Boot Kconfig is not identical to the Kernel's one - so I am not sure if it is a bug in our build system, or in U-Boot.
+# Leaving this comment here now, as a todo
+# Overcome a bug in the config option when there are quotes (""). TODO - very low priority - it's better to work with fragement files anyway and not with override lists
+config_uboot__configs_overrides_build_strategy=fragment # see comment above
+
+export config_uboot__list_of_defconfigs config_uboot__list_of_config_overrides config_uboot__list_of_config_fragments config_uboot__uboot_image_type
+
+#
+# Overriding explanation:
+# We use the p212 defconfig. But its device tree is not accurate to the p281 one. Fortunately, it is upstream so we use it.
+# We enable environment in MMC. This means it will go *onto the sdcard* by default
+# We put it on the 3MiB mark. The selection is a bit random, it should be safe enough from overriding the boot code (~1MiB),
+# and it is below 4MiB, which the original equipment would start having its Android partitions at if IIRC
+# This means that you can "saveenv" (which would not be enabled by default, if the environment goes nowhere)
+# We must also explicitly disable the environment going nowhere.
+# To test you can do something like this on the device (0x1800 * 512 which is the block size are exactly 3MiB )
+#
+# setenv zfoo=bar ; savenev  # observable example
+# mmc dev 0 
+# mmc read $loadaddr 1800 16	
+# md.b $loadaddr 1024
+# In this example:
+# - mmc dev: 0 for sdcard - use 1 for emmc
+# - mmc read: 16 blocks == 0x2000 bytes == 8KiB
+# - 1024 would usually catch the default env. You can add more - if you add too much you will see a lot of zeros
+# Then you can take the sdcard and either on a booted linux on the device, or on your host (after you insert it back)
+# further prove yourself that the environment is stored by doing something like:
+# sudo dd if=/dev/mmcblk0 skip=3MiB count=$((0x1048))  bs=1 | strings
+#
+# One can also take care of the power domain and "Everything Else" power domain for allowing power regulators for the MMC system
+# by adding CONFIG_POWER_DOMAIN=y CONFIG_MESON_EE_POWER_DOMAIN=y - but the atf (ARM Trusted Firmware) thakes care of it, so
+# it's not necessarily necessary and therefore omitted from the defaults.
+#
+
+# Note the escape sequences and the quotes in '' - unless put on a fragment file, it is necessary as the name 
+# of the device tree must be quoted. we would usually use "" otherwise. Perhaps I will change that relevant code at a later
+# point

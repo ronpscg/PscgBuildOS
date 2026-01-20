@@ -1,0 +1,141 @@
+#
+# This is a good example to copy from and modify if you want to support other devices
+# Except for secure boot, which is very vendor dependent and you need all kinds of proprietary and specific tools
+# it implements and illustrates the concepts of everything else
+#
+# This BSP supports the following boot chain:
+# FIP (Firmware Image Package) consists of:
+# - AMLogic proprietary ATF (BL1-BL32 - you may see references to BL0 on the interent/on products -this means modern ATF BL1)
+# - U-Boot (BL33) --> extlinux/extlinux.conf --> 
+#   U-boot via extlinux (distro boot) - which loads in runtime initramfs, dtb, kernel
+#
+# Then, the Linux (or whatever) distro is boot
+# - kernel
+# - rootfs
+#
+# The created chain is meant to be bootable from an sdcard and it will be done automatically if the means to erase the eMMC are
+# done. This is out of the scope of this documentation, and so are other means (like holding the boot button, 
+#  in some of the compatible devices, which by default will trigger a functionality in the U-Boot they came with originally (From 2015!)
+# We build here everything and properly sign the FIP and our objective is to have you boot an U-Boot image (and kernel etc.) that you can
+# work on and customize for your needs.
+#
+
+#
+# Kernel
+#
+: ${config_bsp__build_kernel=true}					# true for building, false for reusing
+
+#
+# Boot firmware since "firmware" is used for other processors and mostly in the distro part (e.g. loaded by kernel), we call it in another name
+#
+: ${config_bsp__build_boot_firmware=true}			# true for building, false for either reusing or not using at all
+: ${config_bsp__build_boot_firmware_coreboot=false}	# true for building, false for either reusing or not using at all
+: ${config_bsp__build_boot_firmware_edk2=false}		# true for building, false for either reusing or not using at all
+: ${config_bsp__build_boot_firmware_atf=false}		# true for building, false for either reusing or not using at all
+
+#
+# Bootloaders
+#
+
+# While a bit redundant - this allows the build system to source generic files if they exist
+# The bootloader must be set in the specific firmware version. However, if it is built from source, for example,
+# one can reuse the source fetching/etc. mechanism for the different projects, or reuse artifacts that can take a while to build
+#
+#
+: ${config_bsp_list_of_common_bootloaders_to_build="u-boot"}				# space separated list. e.g. u-boot extlinux grub
+: ${config_bsp_list_of_common_boot_firmware_to_build=""}					# space seprated list e.g. edk2 atf coreboot
+
+: ${config_bsp__build_bootloader_uboot=true}		# true for building, false for either reusing or not using uboot at all
+: ${config_bsp__build_bootloader_extlinux=true}		# true for building or copying the respective configuration file (perhaps in the future will also build syslinux - I don't think so)
+: ${config_bsp__build_bootloader_grub=false}		# true for building, false for either reusing or not using uboot at all
+
+: ${config_bsp__secure_boot_enabled=false}			# secure boot is involved in many stages and is not included here for the sake of simplicity
+
+# will be phased out or renamed - there is specific reference to the bootloader in initramfs and qemu - but we don't want that
+# as the qemu is meant as an exercise and is not published in the public repository
+# and the default initramfs mechanism with U-boot has been modified, so that if U-boot boots distro boot with extlinux there
+# is no reason to make a u-boot image.s
+: ${config_bsp__bootloader:="extlinux"}
+export config_bsp__bootloader
+
+#
+# Imager
+#
+export config_imager__installer_media_fat_label_start_sector=$((4*$SECTORS_PER_MIB))
+export config_bsp__imager__pre_common_list_of_image_creation_scripts_to_run="$LOCAL_DIR/recipes/image/bsp-imager-pre-common.sh"
+export config_bsp__imager__post_common_list_of_image_creation_scripts_to_run="$LOCAL_DIR/recipes/image/bsp-imager-post-common.sh"
+
+
+bsp__do_build_bootloaders() {
+	for b in "${config_bsp_list_of_common_bootloaders_to_build}" ; do
+		banner_and_do $LAYERS_DIR/common/recipes/bootloaders/$b/build-$b.sh || fatalError "Failed to build $b"
+		if [ -f "${config_bsp_layer}/recipes/bootloaders/$b/build-$b.sh"  ] ; then
+			banner_and_do ${config_bsp_layer}/recipes/bootloaders/$b/build-$b.sh || fatalError "Failed to build $b"
+		fi
+	done	
+}
+
+#
+# Build Firmware Image Package out of the built bootloader image (e.g U-Boot)
+#
+bsp__do_build_boot_firmware() {
+	# doing it all in this function as it is short. we could specify another recipe and use the fetch etc.
+	# but I'm doing it as fast as I can and that's it
+	: ${FIP_BUILD_WORKING_DIRECTORY=$BUILD_DIR/fip}
+	: ${FIP_SOURCE_PARENT_DIR=$FIP_BUILD_WORKING_DIRECTORY}
+	: ${FIP_SOURCE_DIR=$FIP_SOURCE_PARENT_DIR/amlogic-boot-fip-p281}
+	: ${FIP_BUILD_DIR=$FIP_BUILD_WORKING_DIRECTORY/fip-build}	# unnecessary
+	: ${FIP_INSTALL_DIR=$FIP_BUILD_WORKING_DIRECTORY/fip-install}
+
+	export FIP_SOURCE_DIR FIP_INSTALL_DIR
+
+		
+	dod mkdir -p $FIP_BUILD_WORKING_DIRECTORY
+	if [ ! -d $FIP_SOURCE_DIR ] ; then
+		dod git clone https://github.com/ronpscg/amlogic-boot-fip-p281.git $FIP_SOURCE_DIR
+	fi
+
+	dod mkdir -p $FIP_INSTALL_DIR
+	
+	(
+		cd $FIP_SOURCE_DIR 
+		./build-fip.sh p281 ${UBOOT_INSTALL_DIR}/${config_uboot__uboot_image_type} ${FIP_INSTALL_DIR}	
+	) || fatalError "Failed to build FIP"
+
+	info "FIP (flashable prebuilt ATF + PscgBuildOS U-Boot) is available at ${FIP_INSTALL_DIR}${config_uboot__uboot_image_type}.sd.bin"
+
+	#
+	# Note: for the default U-Boot - without doing much - that's fine and workable. If one wants to saveenv, like the default 
+	#       software that comes in those Android boxes, U-boot's defaults need to be modified 
+	#		(i.e. to enable the saveenv command, and to write e.g. to the 3MB offset the environment (in the MMC [or configure it to the eMMC]) and not to "nowhere").
+	#  		i.e. by default U-Boot would set CONFIG_ENV_IS_DEFAULT=y CONFIG_ENV_IS_NOWHERE=y
+	#		we could alternatively set it to something like CONFIG_ENV_IS_IN_MMC=y CONFIG_ENV_OFFSET=0x300000
+	#		we could also select an alternative CONFIG_DEFAULT_DEVICE_TREE and more, but in *this* particular example we won't do so. We will just give you the ideas.
+	#		
+	#		
+	#		When we say it is not doing much, we also mean peripheral support, video, keyboard, I2C, GPIO's etc. The original firmware does support some of it
+	#		and shows a logo (from a dedicated logo parition in Android) in U-Boot. The default configuration does not do so, and since enabling it requires
+	#		explaining quite a few concepts such as regulators, DM (Device-Model in U-Boot, yes, it is confusing and you might have thought of Device Mapper in Linux...),
+	#		GPIO's, power domains and requires deeper understanding of the chipset, we only do it on U-Boot dedicated courses, and it is not present in this example.
+	# An example for that is presented at class
+	#
+}
+
+
+
+
+
+
+stam() {
+return 0;
+bsp/recipes/
+├── firmware/
+│   ├── coreboot
+│   └── edk2
+├── bootloaders/
+│   ├── u-boot
+│   ├── grub
+│   └── extlinux    <-- It lives here
+└── kernel/
+    └── linux
+}

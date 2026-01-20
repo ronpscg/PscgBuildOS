@@ -1,0 +1,15 @@
+#
+# Specific config 
+# For now - we address all amlogic boards in the same way - one could rename variables and be more specific
+# The support in this project at the time of writing is only for one type of SoC family
+#
+: ${config_bsp__product=amlogic-s905w-p281}
+: ${config_bsp__console_device=ttyAML0}
+
+sourcedLocalDir
+source $LOCAL_DIR/bsp_${config_bsp__product}.buildconfig
+
+for b in "${config_bsp_list_of_common_bootloaders_to_build}" ; do
+	source_file_or_die $LOCAL_DIR/recipes/bootloaders/$b/$b.buildconfig	
+	source_file_or_die $LAYERS_DIR/common/recipes/bootloaders/$b/$b.buildconfig	
+done	

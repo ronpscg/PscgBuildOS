@@ -1,0 +1,19 @@
+LOCAL_DIR=$(dirname $(readlink -f ${BASH_SOURCE[0]}))
+config_kernel__list_of_defconfigs="defconfig virt.config" # This will be ignored if config_kernel__kernel_config_src_path is set
+: ${config_kernel__kernel_config_src_path=$LOCAL_DIR/configs/p281-kernel-config}
+: ${config_kernel__list_of_config_overrides=""}
+: ${config_kernel__list_of_config_fragments="$LOCAL_DIR/configs/p281-ethernet-config.fragment $LOCAL_DIR/configs/p281-mali-drm-render-node.fragment $LOCAL_DIR/configs/p281-asoc-config.fragment $LOCAL_DIR/configs/p281-misc.fragment"}
+: ${config_kernel__kernel_image_type=Image.gz}
+: ${config_kernel__list_of_dtbs=amlogic/meson-gxl-s905w-p281.dtb}
+
+
+export config_kernel__list_of_defconfigs config_kernel__list_of_config_overrides config_kernel__list_of_config_fragments config_kernel__kernel_image_type
+export config_kernel__kernel_config_src_path
+
+#
+# Implement this variable if you would like to override the behavior of the common kernel buildconfig
+#
+kernel__specific_init_fetch_unpack_variables() {
+	:
+}
+export -f kernel__specific_init_fetch_unpack_variables
