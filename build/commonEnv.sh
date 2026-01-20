@@ -245,7 +245,7 @@ banner_and_do() {
 }
 
 sourcedLocalDir() {
-	LOCAL_DIR=$(readlink -f $(dirname $BASH_SOURCE[0]))
+	LOCAL_DIR=$(readlink -f $(dirname ${BASH_SOURCE[1]}))
 }
 
 currentLocalDir() {
