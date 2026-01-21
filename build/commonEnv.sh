@@ -239,6 +239,21 @@ add_layer() {
 	info_do_or_die $1/add-layer.sh
 }
 
+#
+# $1 layer path
+# returns the full path of the layer
+#
+get_layer_top() {
+	if [[ "$1" == layers/* ]]; then
+		echo "$BUILD_TOP/$1"
+	elif [[ "$1" != /* ]]; then
+		echo "$LAYERS_DIR/$1"
+	else
+		echo "$1"
+	fi
+}
+export -f get_layer_top
+
 banner_and_do() {
         hardInfo "$@"
         $@
