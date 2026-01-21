@@ -259,14 +259,22 @@ do_make_install() {
 
 	cp ${LINUX_BUILD_DIR}/.config ${LINUX_INSTALL_DIR}/$config_kernel__kernel_config_out_name
 
-	# copy kernel files to the boot partition
+	# copy kernel files to the Linux kernel installation directory. 
+	# The imager will be responsible for deciding where they go unless the distro build script wants to call them explicitly
 	cp ${LINUX_BUILD_DIR}/arch/$ARCH/boot/$config_kernel__kernel_image_type ${LINUX_INSTALL_DIR}/ || fatalError "Failed to copy kernel image to the install dir"
+}
 
+#
+# This is a helper script - which may be moved to the distro or the imager
+# we copy what was
+#
+kernel__distro_helper_copy_installed_materials_to_boot_dir() {
 	cp $LINUX_INSTALL_DIR/$config_kernel__kernel_image_type $BOOT_DIR/$config_kernel__kernel_image_type || fatalError "Failed to copy kernel image to $BOOT_DIR"
 	cp $LINUX_INSTALL_DIR/$config_kernel__kernel_config_out_name $BOOT_DIR/ || error "Failed to copy the kernel config to $BOOT_DIR. It is negligible"
-
-	call_if_exists do_install_dtbs
+	verbose_do_or_die mkdir -p $BOOT_DIR/dtb/
+	verbose_do_or_die cp -rv $kernel__dtbs_install_workdir/* $BOOT_DIR/dtb
 }
+export -f kernel__distro_helper_copy_installed_materials_to_boot_dir
 
 #
 # Do a depmod step to account for out of tree built modules.
@@ -291,7 +299,8 @@ export -f kernel__do_cross_depmod
 # In fact, it is recommended to not run it with the defconfigs of some architecture (arm64), as they will result in lots of files.
 # e.g. for linux-6.19-rc6, there are 1368 such files, weighing a total of 82MB, which is absolutely unnecessary, 
 # given that it is likely that your target requires one file, or a selected few.
-# 
+#
+# This should be overridden per BSP by defining a function with the exact name
 kernel__do_dtbs_install() {
 	if [ ! "$config_kernel__do_dtbs" = "true" ] ; then
 		warn "User opted out of installing dtbs"
@@ -301,7 +310,6 @@ kernel__do_dtbs_install() {
 	logTag="common-build-kernel"
 
 	verbose_do_or_die make  -C $LINUX_SOURCE_DIR O=$LINUX_BUILD_DIR dtbs_install INSTALL_DTBS_PATH=$kernel__dtbs_install_workdir
-
 }
 export -f kernel__do_dtbs_install
 

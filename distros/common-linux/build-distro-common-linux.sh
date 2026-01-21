@@ -442,6 +442,11 @@ main_build_distro() {
 		banner_and_do kernel__do_dtbs_install
 	fi
 
+	if [ "$config_buildtasks__do_build_kernel" = "true" -o "$config_buildtasks__do_build_kernel_dtbs" = "true" ] ; then
+		build_distro__highlight_major_step_in_log "Kernel BOOT_DIR population ($BOOT_DIR)"
+		kernel__distro_helper_copy_installed_materials_to_boot_dir
+	fi
+
 	if [ "$config_buildtasks__do_build_ramdisk" = "true" ] ; then
 		build_distro__highlight_major_step_in_log "initramfs"
 		# We build the swissknife before, whether it is, or is not a part of a rootfs (can be reused)
