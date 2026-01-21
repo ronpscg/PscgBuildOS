@@ -251,6 +251,15 @@ do_removable_media_logic() {
 	while [ ! -b "$REMOVABLE_MEDIA_DEVICE" ] ; do
 		warn "Waiting for removable media..."
 		sleep 1
+		local generic_bsp_independent_attempt_to_find_installer=true
+		local installer_device=""
+		if [ "$generic_bsp_independent_attempt_to_find_installer" = "true" ] ; then
+			installer_device=$(blkid | grep $INSTALLER_MEDIA_LABEL | cut -d: -f 1)
+			if [ -n $installer_device ]	; then
+				info "Found a removable device: $installer_device"
+				REMOVABLE_MEDIA_DEVICE=$installer_device
+			fi
+		fi
 	done
 	bsp_wait_for_removable_media_done 		# bsp specific placeholder to show your lights, beeps, etc.
 

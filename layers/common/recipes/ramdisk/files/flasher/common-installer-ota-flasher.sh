@@ -102,6 +102,7 @@ main_common_installer_ota_flasher() {
 	# We do not provide a reference design here for simplicity, and because this is task and system specific
 
 	if [ "$flashing_reason" = "installer_a_only" ] ; then
+		call_if_exists bsp_pre_create_partitions
 		pre_installer_create_partitions
 	fi
 
