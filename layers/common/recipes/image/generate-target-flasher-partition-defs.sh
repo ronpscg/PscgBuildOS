@@ -27,25 +27,27 @@ export config_imager__partition_size_recovery_tarball
 
 
 #
-# Set default values for MBR/DOS partitionsing scheme - pscgdebos
+# Set default values for MBR/DOS partitionsing scheme - pscg_debos
+# The sizes below are more than enough if the apt caches are cleaned. Otherwise, with graphics involved, they need to be increased
+# Also, the OTA extract may need more space if you plan to keep the previous version as a fast OTA state test (skipping downloading and tarball extraction)
 #
 imager__set_default_emmc_partition_layout_pscgdebos() {
 	# The default units for all of these are 512 byte sectors, unless they are specified with M.
 	# Then, they will be relative
 	# The units are taken from some common Android devices ported to Linux
-	: ${config_imager__partition_start_formatable_emmc_part=$((876*$BYTES_PER_MIB/$BYTES_PER_SECTOR))}	# allow space for data not managed by our system (e.g. U-Boot code, FPGA data, Android partitions, other things)
+	: ${config_imager__partition_start_formatable_emmc_part=$((4*$BYTES_PER_MIB/$BYTES_PER_SECTOR))}	# allow space for data not managed by our system (e.g. U-Boot and ATF)
 	: ${config_imager__partition_start_p1=${config_imager__partition_start_formatable_emmc_part}}
 	: ${config_imager__partition_size_p1=$((66*$BYTES_PER_MIB/$BYTES_PER_SECTOR))}
 	: ${config_imager__partition_size_p2=$((66*$BYTES_PER_MIB/$BYTES_PER_SECTOR))}
 	: ${config_imager__partition_size_p3=$((66*$BYTES_PER_MIB/$BYTES_PER_SECTOR))}
 	: ${config_imager__partition_start_p4=$((1076*$BYTES_PER_MIB/$BYTES_PER_SECTOR))} # Start of the extended partition. Arbitrarily 2MB after the end of partition 3.
 	# Note the partition sizes from here and on: we use the fdisk jargone (+<size>M)
-	: ${config_imager__partition_size_system="+4000M"} # +700M was OK for debos without graphics, 3000M was ok for systemd and weston, 4000M was OK for adding firefox
+	: ${config_imager__partition_size_system="+3072M"} # +700M was OK for debos without graphics, 3000M was ok for systemd and weston, 4000M was OK for adding firefox
 	: ${config_imager__partition_size_ota_state="+10M"}
-	: ${config_imager__partition_size_ota_extract="+6000M"} # just to also install the recovery tarball
+	: ${config_imager__partition_size_ota_extract="+3072M"} # just to also install the recovery tarball
 	: ${config_imager__partition_size_config="+10M"}
 	: ${config_imager__partition_size_roconfig="+10M"}
-	: ${config_imager__partition_size_data="+100M"} # this is a placeholder - for when data gets its own partition
+	: ${config_imager__partition_size_data="+512M"} # this is a placeholder - for when data gets its own partition
 	: ${config_imager__partition_size_system_overlay="+1000M"} # this now includes data  (reduced it from 2600)
 	: ${config_imager__partition_size_recovery_tarball="+2000M"} # 1250M was good for debos without graphics, 1450M was good for systemd and weston, 2000M for the latter+firefox
 }
@@ -57,7 +59,7 @@ imager__set_default_emmc_partition_layout_pscgbusyboxos() {
 	# The default units for all of these are 512 byte sectors, unless they are specified with M.
 	# Then, they will be relative
 	# The units are taken from some common Android devices ported to Linux
-	: ${config_imager__partition_start_formatable_emmc_part=$((876*$BYTES_PER_MIB/$BYTES_PER_SECTOR))}	# allow space for data not managed by our system (e.g. U-Boot code, FPGA data, Android partitions, other things)
+	: ${config_imager__partition_start_formatable_emmc_part=$((4*$BYTES_PER_MIB/$BYTES_PER_SECTOR))}	# allow space for data not managed by our system (e.g. U-Boot code, FPGA data, Android partitions, other things)
 	: ${config_imager__partition_start_p1=$partition_start_formatable_emmc_part}
 	: ${config_imager__partition_size_p1=$((66*$BYTES_PER_MIB/$BYTES_PER_SECTOR))}
 	: ${config_imager__partition_size_p2=$((66*$BYTES_PER_MIB/$BYTES_PER_SECTOR))}
