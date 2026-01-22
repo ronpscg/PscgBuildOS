@@ -106,6 +106,7 @@ main_common_installer_ota_flasher() {
 		pre_installer_create_partitions
 	fi
 
+	debug "$EMMC_DEVICE partition layout:\n$(fdisk -l $EMMC_DEVICE)"
 	do_install_to_partitions || fatalError "Failed to install to partitions"
 
 	if [ "$flashing_reason" = "installer_a_only" ] ; then
