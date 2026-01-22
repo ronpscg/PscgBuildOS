@@ -7,4 +7,13 @@
 : ${pscg_debos_ubuntu_extra_network_packages="wget curl"}
 : ${pscg_debos_ubuntu_network_packages="$pscg_debos_ubuntu_core_network_packages $pscg_debos_ubuntu_more_network_packages $pscg_debos_ubuntu_extra_network_packages"}
 
+# Avahi can be nice to be able to find the system via "pscg_debos.local"
+# I usually prefer to not have it by default, but it can be useful, so I keep it by default
+: ${pscg_debos_ubuntu_enable_zeroconf=true} 
+if [ "$pscg_debos_ubuntu_enable_zeroconf" = "true" ] ; then
+	pscg_debos_ubuntu_network_zeroconf_packages="avahi-daemon libnss-mdns" # libnss-mdnsl is important for actually contacting <destination-host>.local
+	pscg_debos_ubuntu_network_zeroconf_packages+=" avahi-utils" # this is nice to have can do well without it
+	pscg_debos_ubuntu_network_packages="$pscg_debos_ubuntu_network_packages $pscg_debos_ubuntu_network_zeroconf_packages"
+fi
+
 pscg_debos__add_to_package_list $pscg_debos_ubuntu_network_packages
