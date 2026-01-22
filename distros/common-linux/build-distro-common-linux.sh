@@ -207,9 +207,15 @@ quick_demonstration_add_ota_code_to_folder() {
 		fatalError "No source folder in $ota_project_src. You may want to get the source code from somewhere e.g. git clone  https://github.com/ronpscg/PscgBuildOS-ota-update-richos.git $ota_project_src"
 	fi
 
+	local tmpfile=${TMP_TOP}/oot-build/tmp.config
+	if [ -n "$config_distro__url_ota_server_base" ] ; then		
+		echo "URL_OTA_SERVER_BASE=\"$config_distro__url_ota_server_base\"" > $tmpfile || fatalError "Failed to override the OTA server base"
+		export OPTIONAL_OPERATIONAL_CONFIG_FILE_SOURCE=$(readlink -f $tmpfile)
+	fi
 	verbose_eval_or_die workdir=$wd targetarchive=$tarball $ota_tarball_builder
 
-	add_fs_tarball_to_folder $tarball $extraction_dir $method
+	verbose_do_or_die add_fs_tarball_to_folder $tarball $extraction_dir $method
+	rm -f $tmpfile
 }
 
 

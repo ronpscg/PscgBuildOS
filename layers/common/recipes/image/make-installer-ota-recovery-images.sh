@@ -805,6 +805,13 @@ check_folder_free_space() {
 	fi
 }
 
+display_friendly_ota_serving_instructions() {
+	local ota_project_src=$config_toplevel__oot_dir/ota-update-richos
+	info "You may now start serving OTA images. For your convenience, you can use something like
+	( cd $ota_project_src ; workdir=/tmp/PscgBuildOS-otaserver-example/otafiles blob=$config_imager__workdir_compressed manifest=$manifest_file ./hostfiles/test/ota-server.sh  fullota )
+	"
+}
+
 create_ota_recovery_and_installer_images() {
 	if [ ! "$config_imager__create_ota_image" = "true" ] ; then
 		warn "Will not compress working directory. Will not create OTA, recovery and installer images"
@@ -814,6 +821,8 @@ create_ota_recovery_and_installer_images() {
 	info_do_or_die compress_working_directory
 
 	info_do_or_die create_installer_manifest_and_digest_files
+
+	display_friendly_ota_serving_instructions # This is absolutely for the convenience of a developer
 
 	info_do_or_die do_create_installer_image
 }
