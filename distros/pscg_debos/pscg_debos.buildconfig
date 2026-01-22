@@ -143,7 +143,7 @@ export config_pscgdebos__deb_packages_extra
 : ${config_pscgdebos__expected_debcaches_fingerprint=""}	# set to a value only if you want debootstrap caches recreated. Otherwise, having the marker is enough
 : ${config_pscgdebos__recreate_debcaches_on_unmatching_fingerprints=true}	# set to true only if you want mismatching fingerprints to result in redoing debootstrap
 
-: ${config_pscgdebos__postbuild_clean_apt_caches=false}		# if true, this will clean up some apt caches and will force apt update on the target if one wants to reinstall the system
+: ${config_pscgdebos__postbuild_clean_apt_caches=true}		# if true, this will clean up some apt caches and will force apt update on the target if one wants to reinstall the system
 
 export config_pscgdebos__expected_debootstrap_fingerprint config_pscgdebos__recreate_debootstrap_cache_on_unmatching_fingerprints
 export config_pscgdebos__expected_debcaches_fingerprint config_pscgdebos__recreate_debcaches_on_unmatching_fingerprints
