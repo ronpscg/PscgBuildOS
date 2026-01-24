@@ -96,7 +96,7 @@ create_qemu_env() {
 	: \${CMDLINE_CONSOLE="console=$CONSOLE_DEV_TTY"}
 	: \${CMDLINE_GRAPHICS=""}
 	: \${CMDLINE_NETWORK="net.ifnames=0"}
-	: \${CMDLINE_RAMDISK_DEFAULT_SETTINGS="pscgrd.hw.bsp=qemu pscgrd.net.autotelnet=0"}
+	: \${CMDLINE_RAMDISK_DEFAULT_SETTINGS="pscgrd.hw.bsp=qemu pscgrd.net.autotelnet=true"}
 
 	: \${config_ramdisk__compression=$config_ramdisk__compression}
 

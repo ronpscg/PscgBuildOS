@@ -87,14 +87,13 @@ This document describes the kernel command-line parameters used in the ramdisk i
 
 ### `pscgrd.net.autotelnet`
 - **Description**: Enables auto telnet for debugging purposes, by getting an address over DHCP, and opening a password-less root telnet
-- **Affects**: `autotelnet`
+- **Affects**: `AUTOTELNETD`
 - **Default Behavior**: Not set unless explicitly passed.
 - **Usage**:
   ```bash
-  pscgrd.net.autotelnet=1
+  pscgrd.net.autotelnet=true
   ```
-#TODO: change to true and AUTOTELNETD
-
+  
 ---
 
 ### `stopatramdisk`

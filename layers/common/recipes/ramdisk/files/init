@@ -148,7 +148,7 @@ parse_cmdline() {
 				export OPEN_SERIAL_VT_EARLY="${arg#*=}"
 				;;
 			pscgrd.net.autotelnet=*)
-				autotelnet="${arg#*=}"
+				AUTOTELNETD="${arg#*=}"
 				;;
 			stopatramdisk*)
 				# allow for specifying specific places to stop on, and a behavior
@@ -339,8 +339,8 @@ do_open_early_shells_and_telnetd() {
 		open_tty_devices	# see comments inside the function
 	fi
 
-	# This is super insecure. Debugging only! TODO also add a command line parameter for this
-	if [ "$autotelnet" = 1 ] ; then
+	# This is super insecure. Debugging only!
+	if [ "$AUTOTELNETD" = "true" ] ; then
 		enable_ethernet_via_dhcp_and_passwordless_telnet
 	fi
 }
