@@ -245,8 +245,9 @@ source_hardware_dependent_functions() {
 	local filelist="bsp-functions.sh"
 	local prefix="/init-helpers/bsp/$bsp/"
 	local bsp_files_to_source=""
-
+	
 	for f in $filelist; do
+		bsp_files_to_source="$bsp_files_to_source /init-helpers/bsp/common/$f"
   		bsp_files_to_source="$bsp_files_to_source $prefix$f"
 	done
 

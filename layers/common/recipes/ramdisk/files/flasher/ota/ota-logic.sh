@@ -177,7 +177,7 @@ do_reflash_from_ota_extract_or_installer_partition() {
 	else
 		error "Reflash did not succeed"
 		set_state "reflashFailed"
-		bsp_play_sound_from_file /assets/audio/blue.wav # temporary we don't really want to do those sounds, a fatal error is good enough
+		bsp_hmi_event reflash_failed
 	fi
 }
 
@@ -374,7 +374,7 @@ main_ota_logic() {
 			info "Verification seems to have succeeded. If all is good we can now switch labels (but perhaps we will do it from the other system). For now the flashing script shall take care of it"
 		else
 			error "Failed to verify the latest reflashing. It is likely this would lead to a continuous state of error"
-			bsp_play_sound_from_file /assets/audio/blue.wav # temporary we don't really want to do those sounds, a fatal error is good enough
+			bsp_hmi_event reflash_failed
 			exit 2
 		fi
 	fi

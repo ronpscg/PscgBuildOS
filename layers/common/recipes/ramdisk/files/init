@@ -227,8 +227,8 @@ debug_cmdline() {
 #
 do_recovery_golden_image_logic() {
 	case "${recovery}" in
-		hardware_buttons|userspace_trigerred)
-			bsp_play_sound_from_file /assets/audio/${recovery}_recovery.wav
+		hardware_buttons|userspace_triggered)
+			bsp_hmi_event "${recovery}_recovery"
 			mount_ota_partitions || { hardError "Failed to mount ota partitions for recovery" ; return 1 ; }
 			do_recovery_sequence || { hardError "Failed to apply recovery logic" ; return 1 ; }
 			;;

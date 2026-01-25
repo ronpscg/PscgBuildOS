@@ -298,3 +298,14 @@ Any additional parameters not explicitly handled in `parse_cmdline()` or `additi
 
 
 ---
+
+
+## Additional BSP related (optional) parameters
+### `pscgrd.hw.audio_output_backend`
+- **Description**: Specifies the default audio output device to be used in the BSP. For example, some BSP's can decide to switch HDMI, S/PDIF, headphone jack or other outputs according to this kernel command line parameter, and play audio information in the initramfs via these devices.
+- **Affects**: `AUDIO_OUTPUT_BACKEND`
+- **Default Behavior**: None, completely up to the decision of BSP, and its available hardware
+- **Usage**:
+  ```bash
+  pscgrd.hw.audio_output_backend=<hdmi|headphone_jack|[other specific BSP enabled interfaces]>
+  ```

@@ -1,5 +1,3 @@
-: ${BSP_QEMU_SHOW_OFF_WITH_LIGHTS=true}
-
 source /init-helpers/bsp/virtual/bsp-functions.sh
 
 BSP_AUDIO_PLAYBACK_SERVER_PID=""
@@ -49,21 +47,8 @@ bsp_record_sound_to_file() {
 	tinycap $1 -t $2 -c 2 -r 16000Hz -b 16 || warn "Failed to record $2 seconds of sound to file $1"
 }
 
-bsp_stop_current_sound_playback() {
-	pkill -9 tinyplay
-}
-
-bsp_stop_current_sound_recording() {
-	pkill -9 tinycap
-}
-
 # This is useful in case of a playback or recording that is in progress (possibly a dangling overlapping sound) before we want to get to the richos or to a recovery shell
 bsp_stop_current_audio_activities() {
 	bsp_stop_current_sound_playback
 	bsp_stop_current_sound_recording
-}
-
-# This is useful in case someone wants to release a DRM lock, or do some indication before moving to the richos or starting a recovery shell etc.
-bsp_stop_current_graphics_activities() {
-	:
 }

@@ -1,5 +1,3 @@
-: ${BSP_QEMU_SHOW_OFF_WITH_LIGHTS=true}
-
 source /init-helpers/bsp/virtual/bsp-functions.sh
 
 bsp_additional_parse_cmdline() {
