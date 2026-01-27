@@ -31,6 +31,11 @@ init_env() {
 		mkdir $LINUX_INSTALL_DIR || fatalError "Cannot create $LINUX_INSTALL_DIR"
 	fi
 
+	if [ "$config_kernel__do_dtbs" = "true" ] && [ "$ARCH" = "x86_64" -o "$ARCH" = "i386" -o "$ARCH" = "x86" ] ; then
+		verbose "The Linux kernel does not provide a dtbs_install target for x86 architectures"
+		config_kernel__do_dtbs=false
+	fi
+
 	debug "config_kernel__git_repo_uri=$config_kernel__git_repo_uri config_kernel__commit=$config_kernel__commit config_kernel__kernel_config_src_path=$config_kernel__kernel_config_src_path config_kernel__kernel_config_out_name=$config_kernel__kernel_config_out_name" # TODO: probably remove most
 
 	verbose "Building for ARCH=$ARCH CROSS_COMPILE=$CROSS_COMPILE"
@@ -271,8 +276,13 @@ do_make_install() {
 kernel__distro_helper_copy_installed_materials_to_boot_dir() {
 	cp $LINUX_INSTALL_DIR/$config_kernel__kernel_image_type $BOOT_DIR/$config_kernel__kernel_image_type || fatalError "Failed to copy kernel image to $BOOT_DIR"
 	cp $LINUX_INSTALL_DIR/$config_kernel__kernel_config_out_name $BOOT_DIR/ || error "Failed to copy the kernel config to $BOOT_DIR. It is negligible"
-	verbose_do_or_die mkdir -p $BOOT_DIR/dtb/
-	verbose_do_or_die cp -rv $kernel__dtbs_install_workdir/* $BOOT_DIR/dtb
+
+	if [ ! "$config_kernel__do_dtbs" = "true" ] ; then
+		warn "User opted out of installing dtbs of the architecture ($ARCH) does not support it"
+	else
+		verbose_do_or_die mkdir -p $BOOT_DIR/dtb/
+		verbose_do_or_die cp -rv $kernel__dtbs_install_workdir/* $BOOT_DIR/dtb
+	fi
 }
 export -f kernel__distro_helper_copy_installed_materials_to_boot_dir
 
@@ -303,7 +313,7 @@ export -f kernel__do_cross_depmod
 # This should be overridden per BSP by defining a function with the exact name
 kernel__do_dtbs_install() {
 	if [ ! "$config_kernel__do_dtbs" = "true" ] ; then
-		warn "User opted out of installing dtbs"
+		warn "User opted out of installing dtbs of the architecture ($ARCH) does not support it"
 		return
 	fi
 	local prevLogTag=$logTag
