@@ -1,0 +1,12 @@
+#
+# Add some slim editors and other low space useful utilities
+#
+# This implements the distro equivalents of the pscg_debos layer's common/packages.deb.buildconfig
+
+: ${pscg_alpineos__misc_common_editors_packages=""} # vim weighs around 32MB (!) and we have it on busybox so no need for it
+: ${pscg_alpineos__misc_common_utils_packages="e2fsprogs e2fsprogs-extra file util-linux"} # tune2fs is in e2fsprogs-extra
+: ${pscg_alpineos__misc_common_packages="$pscg_alpineos__misc_common_editors_packages $pscg_alpineos__misc_common_utils_packages"}
+
+pscg_alpineos__add_to_package_list $pscg_alpineos__misc_common_packages
+
+LOCAL_APK_FLAGS="--repository /var/cache/apk/APKINDEX.tar.gz --no-network --allow-untrusted"

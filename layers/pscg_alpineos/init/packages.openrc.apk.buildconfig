@@ -1,0 +1,5 @@
+# actually everything under the init/ could be in the same file, as we mostly use the buildconfig 
+# to create the caches.
+LOCAL_INSTALL_PACKAGES="openrc-init"		# Packages to install
+pscg_alpineos__add_to_package_list $LOCAL_INSTALL_PACKAGES
+LOCAL_APK_FLAGS="--repository /var/cache/apk/APKINDEX.tar.gz --no-network --allow-untrusted"

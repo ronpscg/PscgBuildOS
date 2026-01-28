@@ -1,0 +1,10 @@
+#
+# Note: In a minimal system it is very likely you would either put curl, wget, both, or neither.
+# wget is installed by default in Alpine, curl is not
+#
+
+: ${pscg_alpineos__network_packages="dropbear dropbear-ssh dropbear-scp"}
+: ${pscg_alpineos__extra_network_packages="curl"}
+# could add zeroconf etc. but won't do it for now
+pscg_alpineos__add_to_package_list $pscg_alpineos__network_packages
+LOCAL_APK_FLAGS="--repository /var/cache/apk/APKINDEX.tar.gz --no-network --allow-untrusted"

@@ -1,5 +1,165 @@
+#
+# Adjust names to the names used by upstream Alpine
+#
+pscg_alpineos__set_arch_specific_variables_if_needed() {
+	source "$DISTROS_DIR/pscg_alpineos/pscg_alpineos.minirootfs_upstream.buildconfig"
+	eval_or_die "declare | grep -q ALPINEOS_MINI_ROOTFS_ARRAY"
+
+	local archadj=$ARCH	
+	case $ARCH in
+		x86_64)
+			;;
+		arm64)
+			archadj=aarch64
+			;;
+		i386)
+			archadj=x86
+			;;
+		arm)
+			case $config_toplevel__arch_subarch in
+				""|armv7)
+					archadj=armv7
+					;;
+				armhf)
+					archadj=armhf
+					;;
+				armel)
+					fatalError "Please don't use armel with this distro - it does not refer to non armhf as Debian does do"
+					;;
+				*)
+					fatalError "Invalid subarch for arm $config_toplevel__arch_subarch"
+					;;
+			esac
+			;;
+		riscv)
+			archadj=riscv64
+			;;
+		loongarch)
+			archadj=loongarch64
+			;;
+		powerpc)
+			archadj=ppc64le
+			;;
+		s390)
+			archadj=s390x
+			;;
+		*)
+			fatalError "${config_distro} rootfs environment expects other architectures than $ARCH. Perhaps you can create one with
+https://git.alpinelinux.org/aports/tree/scripts/bootstrap.sh, upload it + sha256 sum somewhere, and update the script"
+			;;
+	esac
+
+	#export config_bsp__qemu_layer=bsp/recipes/linux/bsp-pscg_debos-qemu-$bspname_archnamefixup
+	export config_pscg_alpineos__alpine_arch=$archadj	
+
+	# We will need to change them for debian etc.
+}
+export -f pscg_alpineos__set_arch_specific_variables_if_needed
+pscg_alpineos__set_arch_specific_variables_if_needed # Calling it for the variables - not for the arrays
+
+#pscg_alpineos__set_arch_specific_variables_if_needed # maybe needed
+source $BUILD_TOP/distros/pscg_alpineos/recipes/rootfs/alpineos-common.inc # no need to hide behind variables - this is very specific to this distro
+#alpineos_common_init_env
+
+# No specific prebuild-sanity-check for Alpine yet, but following the structure:
+# info_do_or_die $BUILD_TOP/distros/pscg_alpineos/sanity/prebuild-sanity-check-alpine-versions.sh
+
+export distro__identifier_name=${config_distro}-${config_pscg_alpineos__version}-${config_pscg_alpineos__variant}-${config_pscg_alpineos__arch}
+
+
+: ${config_pscg_alpineos__init_frameworks="openrc"}
+export config_pscg_alpineos__init_frameworks
+
+
+# There are many considerations for network managers. Alpine often just uses ifupdown/busybox
+: ${config_pscg_alpineos__network_manager=""}
+export config_pscg_alpineos__network_manager
+
+source_file_or_die $DISTROS_DIR/common-linux/pscg_linux.buildconfig
+
+: ${config_pscg_alpineos__apk_packages_extra=""} # List of packages to install regardless of whatever is in the scripts
+export APK_PACKAGE_LIST						 # List of packages to install *except* for those in base minirootfs.
+export APK_CONFLICTING_PACKAGE_LIST			 # List of packages that are to be installed separately
+export config_pscg_alpineos__apk_packages_extra
+
+# Caches fingerprints
+: ${config_pscg_alpineos__expected_rootfs_fingerprint=""} # set to a value only if you want base caches recreated.
+: ${config_pscg_alpineos__recreate_rootfs_cache_on_unmatching_fingerprints=true}
+
+: ${config_pscg_alpineos__expected_apkcaches_fingerprint=""}
+: ${config_pscg_alpineos__recreate_apkcaches_on_unmatching_fingerprints=true}
+
+: ${config_pscg_alpineos__postbuild_clean_apk_caches=true} # if true, this will clean up /var/cache/apk/
+
+export config_pscg_alpineos__expected_rootfs_fingerprint config_pscg_alpineos__recreate_rootfs_cache_on_unmatching_fingerprints
+export config_pscg_alpineos__expected_apkcaches_fingerprint config_pscg_alpineos__recreate_apkcaches_on_unmatching_fingerprints
+export config_pscg_alpineos__postbuild_clean_apk_caches
+
+#
+# Add a package to the list of conflicting package list.
+#
+pscg_alpineos__add_to_conflicting_package_list() {
+	APK_CONFLICTING_PACKAGE_LIST="$APK_CONFLICTING_PACKAGE_LIST $@"
+}
+
+#
+# This is mostly used as a trick to increase the cache hits for different build
+#
+pscg_alpineos__handle_package_conflicts() {
+	local rc=0
+	for p in $@ ; do
+		if echo $APK_CONFLICTING_PACKAGE_LIST | grep -q $p ; then
+			rc=1
+			warn "$p has known conflicts!"
+			continue
+		fi
+		if ! echo $APK_PACKAGE_LIST | grep -q $p ; then
+			APK_PACKAGE_LIST="$APK_PACKAGE_LIST $p"
+		fi
+	done
+	return $rc
+}
+
+pscg_alpineos__add_to_package_list() {
+	# check that this package does not have known conflicts first.
+	if ! pscg_alpineos__handle_package_conflicts $@ ; then
+		return
+	fi
+	if [ -z "$APK_PACKAGE_LIST" ] ; then
+		APK_PACKAGE_LIST="$APK_PACKAGE_LIST $@"
+		return
+	fi
+
+	for p in $@ ; do
+		if ! echo $APK_PACKAGE_LIST | grep -q $p ; then
+			APK_PACKAGE_LIST="$APK_PACKAGE_LIST $p"
+		fi
+	done
+}
+
+pscg_alpineos__print_package_list() {
+	echo $APK_PACKAGE_LIST
+}
+
+pscg_alpineos__print_conflicting_package_list() {
+	echo $APK_CONFLICTING_PACKAGE_LIST
+}
+
+export config_pscg_alpineos__extra_layers_file
+: ${config_pscg_alpineos__extra_layers_file=""}
+
+export -f pscg_alpineos__add_to_package_list pscg_alpineos__print_package_list
+export -f pscg_alpineos__add_to_conflicting_package_list pscg_alpineos__print_conflicting_package_list
+export -f pscg_alpineos__handle_package_conflicts
+
+
+
+#----------- original contents are below -----------------------
+
+
 export distro__identifier_name=${config_distro}-${ARCH} # TODO: take into consideration subarchs etc. but for now we are refining the system and focusing on the ARCH only
 source_file_or_die $DISTROS_DIR/common-linux/pscg_linux.buildconfig
 # I don't want to use symlink or hardlink because I want to demonstrate reusing and then changing etc/ stuff
 # This time we won't change the ramdisk etc. so why not.
 config_distro__prebuilt_image_materials_reusing_method=symlink
+
