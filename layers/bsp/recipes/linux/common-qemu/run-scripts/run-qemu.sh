@@ -269,7 +269,8 @@ set_storage_params() {
 		target_emmc_device=vda
 		target_removablemedia_device=vdb
 
-		if [[ "$ARCH" =~ "arm" ]] ; then
+		# You may want to modify the order. The next if is not necessarily guaranteed, and you may want to modify the file after it is generated
+		if [[ "$ARCH" =~ "arm" ]] || [[ "$ARCH" = "aarch64" ]] ; then
 			warn "Reversing vda/vdb order for $ARCH as they seem to be reversed compared to other architectures"
 			target_emmc_device=vdb
 			target_removablemedia_device=vda
