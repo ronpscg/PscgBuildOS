@@ -45,7 +45,23 @@ check_evident_and_inaccurate_image_sizes() {
 	if [ "$ENABLE_GRAPHICS" = "true" ] ; then
 		verbose "Checking if the installer image size is big enough for $config_distro graphics..."
 		if [ "$config_imager__installer_media_size_sectors" -lt "$((5*$SECTORS_PER_GIB))" ] ; then
-			fatalError "config_imager__installer_media_size_sectors=$config_imager__installer_media_size_sectors. Please increase it!"
+			case "$config_distro" in
+				"pscg_debos")
+					if [ "$config_bsp_layer" = "$config_bsp__qemu_layer" ] ; then
+						fatalError "config_imager__installer_media_size_sectors=$config_imager__installer_media_size_sectors. Please increase it!"
+					else
+						warn "config_imager__installer_media_size_sectors=$config_imager__installer_media_size_sectors."
+						warn "if you add graphic packages to $config_distro rootfs and did not set ENABLE_GRAPHICS=true just for the minimal set, you may have to increase the size!"	
+					fi
+					;;
+				*)
+					# ENABLE_GRAPHICS is used in wrapper scripts to add DRM to the kernel and to add some QEMU params
+					# so it would be nice to be more permisive on the other distros and not just fail the build
+					# We are doing this here, and if that becomes an issue, one could tune the size parameter for the non debos distros
+					warn "config_imager__installer_media_size_sectors=$config_imager__installer_media_size_sectors."
+					warn "if you add graphic packages to $config_distro rootfs and did not set ENABLE_GRAPHICS=true just for the minimal set, you may have to increase the size!"
+					;;
+				esac
 		fi
 	fi
 }
