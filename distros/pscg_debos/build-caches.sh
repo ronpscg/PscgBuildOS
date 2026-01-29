@@ -93,7 +93,7 @@ copy_from_base_debootstrap() {
 	verbose "Copying from debootstrap: $CACHED_DEBOOTSTRAP_DIR --> $CACHED_DEB_CACHES_WORKDIR"
 	if [ ! -d "$CACHED_DEBOOTSTRAP_DIR" ] ; then
 		error "$CACHED_DEBOOTSTRAP_DIR does not exist. Did you mess with the caches? You would likely have to clean up your rootfs dir, or use cleanup flags"
-		warn "Try to cleaup $ROOTFS_DIR/$DEBOOTSTRAP_DONE_MARKER_PATH perhaps, or remove the rootfs dir"
+		warn "Try to cleanup $ROOTFS_DIR/$DEBOOTSTRAP_DONE_MARKER_PATH perhaps, or remove the rootfs dir"
 	fi
 	do_or_die sudo cp -aT $CACHED_DEBOOTSTRAP_DIR $CACHED_DEB_CACHES_WORKDIR
 }
