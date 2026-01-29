@@ -21,3 +21,8 @@ bsp_additional_parse_cmdline() {
 		esac
 	done
 }
+
+bsp_play_sound_from_generated_on_the_fly_sequence() {
+	: 
+	hardWarn "Avoiding playing sound $@"
+}
