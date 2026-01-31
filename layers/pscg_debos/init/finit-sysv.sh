@@ -4,7 +4,6 @@
 # append the little required extra (serial console device).
 #
 
-: ${CONSOLE_DEV_TTY=ttyAMA0} 			# While this solves one of the exercises usually given, it helps with easy setting up of demos
 LOCAL_APT_FLAGS="--no-install-recommends"	# for slimmer packages. if you want rsyslog as part of the installation, use the install recommends
 LOCAL_APT_FLAGS="$LOCAL_APT_FLAGS -o Dpkg::Options::='--force-confnew'" # If you are reinstalling on an existing system - recreate the configuration file, and then do the changes. If you are building from scratch, it doesn't matter. If you are building from scratch, it doesn't matter
 

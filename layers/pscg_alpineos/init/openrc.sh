@@ -4,8 +4,6 @@
 # append the little required extra (serial console device).
 #
 
-: ${CONSOLE_DEV_TTY=ttyAMA0} 			# While this solves one of the exercises usually given, it helps with easy setting up of demos
-
 set_default_terminal_properties() {
 	local profiledfile=pscg_alpineos_term_properties.sh
 	sudo tee << EOF $ROOTFS_DIR/etc/profile.d/$profiledfile > /dev/null || fatalError "Failed to create $ROOTFS_DIR/etc/profile.d/$profiledfile"

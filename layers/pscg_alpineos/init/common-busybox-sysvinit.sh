@@ -7,18 +7,27 @@
 # append the little required extra (serial console device).
 #
 
-: ${CONSOLE_DEV_TTY=ttyAMA0} 			# While this solves one of the exercises usually given, it helps with easy setting up of demos
-
 main() {
-	sed -i "s|#ttyS0::respawn:/sbin/getty -L 115200 ttyS0 vt100|$CONSOLE_DEV_TTY::respawn:/sbin/getty -L 115200 $CONSOLE_DEV_TTY linux|" $ROOTFS_DIR/etc/inittab	
-	# remove login
-	sed -i "s|/sbin/getty -L 115200 $CONSOLE_DEV_TTY linux|/sbin/getty -n -l /bin/sh -L 115200 $CONSOLE_DEV_TTY linux|" $ROOTFS_DIR/etc/inittab
-	
-	# add hvc0 console device, in case QEMU is used and we wish to enable its hypervisor console as well
-	# Note: it is very likely that if you run the rootfs in docker - it will continuosly complain that hvc0 does not exist	
-	if ! grep -q "hvc0::respawn:/sbin/getty -L 115200 hvc0 linux" $ROOTFS_DIR/etc/inittab ; then
-		echo 'hvc0::respawn:/sbin/getty -L 115200 hvc0 linux' >> $ROOTFS_DIR/etc/inittab
+	# Unconditionally remove the commented line for the default interface, and replace it with the right console device if needs be
+	sed -i "s|#ttyS0::respawn:/sbin/getty -L 115200 ttyS0 vt100|$CONSOLE_DEV_TTY::respawn:/sbin/getty -L 115200 $CONSOLE_DEV_TTY linux|" $ROOTFS_DIR/etc/inittab
+	if [ "$config_pscg_alpineos__inittab_skip_console_login" = "true" ] ; then		
+		# remove login
+		sed -i "s|/sbin/getty -L 115200 $CONSOLE_DEV_TTY linux|/sbin/getty -n -l /bin/sh -L 115200 $CONSOLE_DEV_TTY linux|" $ROOTFS_DIR/etc/inittab
+	else
+		# Allow root login on tty (if it is not automatically enabled by avoiding login in the inittab)
+		if ! grep -q $CONSOLE_DEV_TTY ${ROOTFS_DIR}/etc/securetty ; then
+			echo $CONSOLE_DEV_TTY >> ${ROOTFS_DIR}/etc/securetty
+		fi
 	fi
+	
+	for a in $ADDITIONAL_CONSOLE_DEV_TTY_NODES ; do
+	# add device, e.g. hvc0 console device, in case QEMU is used and we wish to enable its hypervisor console as well
+	# Note: it is very likely that if you run the rootfs in docker - it will continuosly complain that hvc0 does not exist
+	# so we modified it to be a build parameter
+		if ! grep -q "$a::respawn:/sbin/getty -L 115200 $a linux" $ROOTFS_DIR/etc/inittab ; then
+			echo "$a::respawn:/sbin/getty -L 115200 $a linux" >> $ROOTFS_DIR/etc/inittab
+		fi
+	done
 	
 	# Force setting the hostname for logins. Otherwise, you will see (none) as the hostname (or whatever the kernel config, or initramfs set)
 	

@@ -7,26 +7,29 @@ export config_bsp__console_device
 # a more specific BSP can override this function
 #
 bsp_linux__set_console_device_by_target_architecture() {
-	if [ -n "$config_bsp__console_device" ] ; then
-		CONSOLE_DEV_TTY=$config_bsp__console_device
+	: ${CONSOLE_DEV_TTY=${config_bsp__console_device}}
+	: ${ADDITIONAL_CONSOLE_DEV_TTY_NODES=${config_bsp__additional_console_devices}} # This may be used explicitly - e.g. for having hvc0 in QEMU or XEN etc.
+	export CONSOLE_DEV_TTY					 
+	export ADDITIONAL_CONSOLE_DEV_TTY_NODES
+	if [ -n "$config_bsp__console_device" ] ; then		
 		return
 	fi
 
+	# every conditional assignment must have ":="" then, and not "="" (!)
 	case $ARCH in
 		arm*|aarch64)
-			: ${CONSOLE_DEV_TTY=ttyAMA0}
+			: ${CONSOLE_DEV_TTY:=ttyAMA0}
 			;;
 		x86*|i*86)
-			: ${CONSOLE_DEV_TTY=ttyS0}
+			: ${CONSOLE_DEV_TTY:=ttyS0}
 			;;
 		riscv*)
-			: ${CONSOLE_DEV_TTY=ttyS0}
+			: ${CONSOLE_DEV_TTY:=ttyS0}
 			;;
 		*)
 			warn "Please be more specific if you add target architecture. Will assume that the console is ttyS0 - however, you may want to double check it with, e.g. your device tree"
-			: ${CONSOLE_DEV_TTY=ttyS0}
+			: ${CONSOLE_DEV_TTY:=ttyS0}
 			;;
 	esac
-	export CONSOLE_DEV_TTY
 }
 export -f bsp_linux__set_console_device_by_target_architecture

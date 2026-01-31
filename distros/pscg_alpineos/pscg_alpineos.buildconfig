@@ -70,6 +70,9 @@ export distro__identifier_name=${config_distro}-${config_pscg_alpineos__version}
 : ${config_pscg_alpineos__init_frameworks="openrc"}
 export config_pscg_alpineos__init_frameworks
 
+: ${config_pscg_alpineos__inittab_skip_console_login=true} # if true inittab will skip login. otherwise, the regular tty logic will be done and the console device will be added to securetty
+export config_pscg_alpineos__inittab_skip_console_login
+
 
 # There are many considerations for network managers. Alpine often just uses ifupdown/busybox
 : ${config_pscg_alpineos__network_manager=""}
