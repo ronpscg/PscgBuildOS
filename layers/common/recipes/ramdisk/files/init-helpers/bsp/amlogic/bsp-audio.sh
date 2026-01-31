@@ -25,6 +25,10 @@ bsp_init_audio_set_output_headphone_jack() {
 	export DEFAULT_AUDIO_SAMPLE_RATE=44100
 }
 
+bsp_init_audio_check_hdmi_audio_parameters() {
+	[ "$(grep sad_count /proc/asound/card0/eld\#4  | tr -s '\t' | cut -f 2)" -gt "0" ]
+}
+
 bsp_init_audio_playback() {
 	case "$AUDIO_OUTPUT_BACKEND" in
 		hdmi|HDMI)
@@ -35,7 +39,7 @@ bsp_init_audio_playback() {
 			;;
 		*)
 			warn "Please provide a proper pscgrd.hw.audio_output_backend parmeter (your provided: $AUDIO_OUTPUT_BACKEND)"
-			if  ls /proc/asound/card0/eld*  ; then 
+			if  bsp_init_audio_check_hdmi_audio_parameters ; then
 				info "Detected an HDMI monitor. Will route sound through it"
 				bsp_init_audio_set_output_hdmi
 			else
@@ -95,4 +99,42 @@ ctl     type    num     name                                            device
 15      BOOL    1       AIU ACODEC OUT EN Switch                        0
 16      ENUM    1       ACODEC Right DAC Sel                            0
 17      ENUM    1       ACODEC Left DAC Sel                             0
+
+# Below are examples for disconnected vs connected set
+# the important thing is sad_count. It should be at least 2. If it's 0 there are absolutely no device connected or identified
+# cat /proc/asound/card0/eld\#4 udhcpc: broadcasting discover
+monitor_name
+connection_type         HDMI
+eld_version             [0x0] reserved
+edid_version            [0x0] no CEA EDID Timing Extension block present
+manufacture_id          0x0
+product_id              0x0
+port_id                 0x0
+support_hdcp            0
+support_ai              0
+audio_sync_delay        0
+speakers                [0x0]
+sad_count               0
+
+# cat /proc/asound/card0/eld\#4 
+monitor_name            Philips FTV
+connection_type         HDMI
+eld_version             [0x2] CEA-861D or below
+edid_version            [0x3] CEA-861-B, C or D
+manufacture_id          0xc41
+product_id              0x0
+port_id                 0x0
+support_hdcp            0
+support_ai              0
+audio_sync_delay        0
+speakers                [0x1] FL/FR
+sad_count               2
+sad0_coding_type        [0x1] LPCM
+sad0_channels           2
+sad0_rates              [0x6e0] 32000 44100 48000 88200 96000
+sad0_bits               [0xe] 16 20 24
+sad1_coding_type        [0x2] AC-3
+sad1_channels           6
+sad1_rates              [0xe0] 32000 44100 48000
+sad1_max_bitrate        640000
 fi
